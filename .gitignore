@@ -19,8 +19,8 @@ coverage/
 .DS_Store
 Thumbs.db
 
-# Local database files
-data/
+# Ignore only root-level local database files
+/data/
 *.db
 *.db-wal
 *.db-shm
