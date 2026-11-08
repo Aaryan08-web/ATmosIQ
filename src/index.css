@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Lora", Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-serif: "Lora", Georgia, Cambria, "Times New Roman", Times, serif;
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #0B1713;
+  --foreground: #F2F5F2;
+  --primary: #00D6A0;
+  --primary-foreground: #0B1713;
+  --secondary: #101F18;
+  --secondary-foreground: #F2F5F2;
+  --muted: #101F18;
+  --muted-foreground: #9CAEA2;
+  --accent: #174C34;
+  --accent-foreground: #F2F5F2;
+  --popover: #101F18;
+  --popover-foreground: #F2F5F2;
+  --border: rgba(46, 139, 87, 0.25);
+  --card: #14251C;
+  --card-foreground: #F2F5F2;
+
+  --color-atmos-bg: #0B1713;
+  --color-atmos-secondary: #101F18;
+  --color-atmos-forest: #174C34;
+  --color-atmos-emerald: #2E8B57;
+  --color-atmos-accent: #00D6A0;
+  --color-atmos-text: #F2F5F2;
+  --color-atmos-muted: #9CAEA2;
+  --color-atmos-border: rgba(46, 139, 87, 0.2);
+  --color-atmos-card: #14251C;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #0B1713;
+  color: #F2F5F2;
+  font-family: "Lora", serif;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-style: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6, p, span, a, button, input, select, textarea, label {
+  font-family: "Lora", serif;
+}
+
+/* Custom scrollbar for data tables and side panels */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0B1713;
+}
+::-webkit-scrollbar-thumb {
+  background: #174C34;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2E8B57;
+}
+
+/* Global Lora Typography helper classes */
+.font-lora {
+  font-family: "Lora", serif;
+  font-optical-sizing: auto;
+  font-style: normal;
+}
+
+.dashboard-root {
+  font-family: "Lora", serif;
+  font-optical-sizing: auto;
+}
+
+.dashboard-root h1,
+.dashboard-root h2,
+.dashboard-root h3,
+.dashboard-root h4,
+.dashboard-root .font-heading {
+  font-family: "Lora", serif;
+  letter-spacing: -0.015em;
+}
+
+/* Sleek Dark Leaflet Zoom Controls in Bottom-Left Corner */
+.leaflet-bottom.leaflet-left {
+  margin-left: 8px !important;
+  margin-bottom: 8px !important;
+  z-index: 999 !important;
+}
+
+.leaflet-control-zoom {
+  border: 1px solid rgba(16, 185, 129, 0.4) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5) !important;
+}
+
+.leaflet-control-zoom a {
+  background-color: rgba(13, 25, 20, 0.95) !important;
+  color: #a7f3d0 !important;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.25) !important;
+  font-weight: bold !important;
+  transition: all 0.2s ease !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background-color: #142820 !important;
+  color: #34d399 !important;
+}
+
