@@ -21,7 +21,7 @@ export const EnvironmentalKpiGrid: React.FC<KpiGridProps> = ({
   // Calculations based on live data
   const worstAq = overview?.airQuality?.worst;
   const unhealthyStations = overview?.airQuality?.unhealthy || 0;
-  const totalStations = overview?.airQuality?.stations || 45;
+  const totalStations = overview?.airQuality?.stations || 58;
   const fireCount = fires?.points?.length || overview?.fires?.total || 0;
   const totalFrp = useMemo(() => {
     return Math.round((fires?.points ?? []).reduce((acc, p) => acc + (p.frp || 0), 0));
@@ -101,8 +101,8 @@ export const EnvironmentalKpiGrid: React.FC<KpiGridProps> = ({
         value={worstAq?.usAqi != null ? `${worstAq.usAqi} AQI` : '—'}
         subtitle={
           worstAq
-            ? `Worst: ${worstAq.name}, ${worstAq.country} (${worstAq.category})`
-            : 'European CAMS continuous atmospheric monitoring'
+            ? `Peak: ${worstAq.name}, India (${worstAq.category})`
+            : 'European CAMS atmospheric reanalysis stream'
         }
         icon={Wind}
         badge={{
@@ -111,7 +111,7 @@ export const EnvironmentalKpiGrid: React.FC<KpiGridProps> = ({
             (worstAq?.usAqi || 0) > 150 ? 'red' : (worstAq?.usAqi || 0) > 100 ? 'amber' : 'emerald',
         }}
         details={[
-          { label: 'Monitored Cities', value: `${totalStations}` },
+          { label: 'CAMS Grid Points', value: `${totalStations} (28S/8UT)` },
           { label: 'Unhealthy Count', value: `${unhealthyStations}` },
         ]}
         linkTo="/dashboard/atmospheric"

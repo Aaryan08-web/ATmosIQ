@@ -13,6 +13,7 @@ import {
   LogOut,
   X,
   Leaf,
+  ShieldCheck,
 } from 'lucide-react';
 import type { User } from '@/types';
 
@@ -85,6 +86,23 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
     ? { duration: 0.01 }
     : { duration: 0.3, ease: 'easeInOut' as const };
 
+  const navSections = React.useMemo(() => {
+    if (user.role === 'admin') {
+      return NAV_SECTIONS.map((sec) =>
+        sec.category === 'SYSTEM'
+          ? {
+              ...sec,
+              items: [
+                ...sec.items,
+                { title: 'Admin Console', path: '/dashboard/admin', icon: ShieldCheck, badge: 'Gov' },
+              ],
+            }
+          : sec
+      );
+    }
+    return NAV_SECTIONS;
+  }, [user.role]);
+
   // In desktop mode: expanded if either not pinned-collapsed OR actively hovered
   const isDesktopExpanded = !collapsed || isHovered;
 
@@ -155,7 +173,7 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
 
       {/* Navigation Sections Area with smooth scroll */}
       <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-3 scrollbar-thin scrollbar-thumb-emerald-950">
-        {NAV_SECTIONS.map((section, sIdx) => (
+        {navSections.map((section, sIdx) => (
           <div key={section.category} className="space-y-1">
             {/* Section Header or Divider */}
             {sIdx > 0 && (

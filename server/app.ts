@@ -9,6 +9,7 @@ import './db.js';
 import { authRouter } from './routes/auth.js';
 import { dataRouter } from './routes/data.js';
 import { adminRouter } from './routes/admin.js';
+import { getGfwSyncStatus } from './data/gfwIngestion.js';
 
 export function createApp() {
   const app = express();
@@ -38,10 +39,36 @@ export function createApp() {
   app.use(cookieParser());
 
   app.get('/api/health', (_req, res) => {
+    const gfw = getGfwSyncStatus();
     res.json({
       ok: true,
       time: new Date().toISOString(),
       integrations: { firms: !!config.firmsKey, gemini: !!config.geminiKey },
+      services: {
+        firms: {
+          configured: !!config.firmsKey,
+          defaultSource: config.firmsDefaultSource,
+          status: config.firmsKey ? 'active' : 'unconfigured',
+        },
+        openMeteo: {
+          configured: true,
+          provider: 'Copernicus Atmospheric Service via Open-Meteo',
+          status: 'active',
+        },
+        gfw: {
+          configured: !!config.gfwKey,
+          status: gfw.status,
+          lastAttemptAt: gfw.last_attempt_at,
+          lastSuccessAt: gfw.last_success_at,
+          recordsIngested: gfw.records_ingested,
+          errorMessage: gfw.error_message,
+        },
+        gemini: {
+          configured: !!config.geminiKey,
+          model: config.geminiModel,
+          status: config.geminiKey ? 'active' : 'unconfigured',
+        },
+      },
     });
   });
   app.use('/api/v1/auth', authRouter);

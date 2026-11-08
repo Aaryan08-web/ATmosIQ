@@ -13,7 +13,7 @@ export const DataSourcesPage: React.FC = () => {
       badge: fires.data?.live ? 'Live Sensor Pass' : 'Sample Telemetry Pass',
       status: fires.data?.live ? 'live' : 'sample',
       description:
-        'Continuous near-real-time (NRT) satellite observation capturing active thermal anomalies and fire radiative power (FRP) across global terrestrial biomes.',
+        'Continuous near-real-time (NRT) satellite observation capturing active thermal anomalies and fire radiative power (FRP) across sovereign Indian territory and agricultural zones.',
       specs: [
         { label: 'Sensor Resolution', value: '375m Spatial Resolution (VIIRS)' },
         { label: 'Satellites', value: 'Suomi-NPP & NOAA-20 / NOAA-21' },
@@ -32,12 +32,13 @@ export const DataSourcesPage: React.FC = () => {
       badge: air.data ? 'Live Model Stream' : 'Unavailable',
       status: air.data ? 'live' : 'unavailable',
       description:
-        'Comprehensive multi-pollutant atmospheric chemistry modeling combining satellite assimilation, European reanalysis, and surface observation vectors across major international metropolitan coordinates.',
+        'Comprehensive multi-pollutant atmospheric chemistry modeling combining satellite assimilation, European reanalysis, and surface observation vectors across all 28 Indian States and 8 Union Territories.',
       specs: [
         { label: 'Atmospheric Model', value: 'CAMS European Global Atmospheric Composition' },
-        { label: 'Pollutants Tracked', value: 'PM2.5, PM10, Nitrogen Dioxide (NO2), Ozone (O3), US AQI' },
-        { label: 'Temporal Cadence', value: 'Hourly synchronous reanalysis' },
-        { label: 'Spatial Coverage', value: `${air.data?.points?.length || 45} Primary Global Metropolises` },
+        { label: 'Pollutants Tracked', value: 'PM2.5, PM10, Nitrogen Dioxide (NO2), Ozone (O3), Carbon Monoxide (CO), Sulfur Dioxide (SO2), US AQI' },
+        { label: 'Temporal Cadence', value: 'Hourly synchronous reanalysis & forecasts' },
+        { label: 'Spatial Coverage', value: `${air.data?.points?.length || 58} CAMS Grid Extractions across All 28 Indian States & 8 UTs` },
+        { label: 'Model Methodology', value: 'Copernicus Atmospheric Reanalysis & Satellite Assimilation (Modelled Estimates, Not Ground CAAQMS)' },
         { label: 'Last Model Run', value: air.data?.fetchedAt ? new Date(air.data.fetchedAt).toLocaleTimeString() : 'Hourly cycle' },
       ],
       attribution: 'Copernicus Atmospheric Monitoring Service & Open-Meteo',
@@ -46,33 +47,62 @@ export const DataSourcesPage: React.FC = () => {
     },
     {
       id: 'gfw',
-      name: 'Global Forest Watch (Curated Reference Dataset)',
+      name: 'Global Forest Watch Data API & Reference Baseline',
       icon: TreeDeciduous,
-      badge: 'Reference Database',
-      status: 'reference',
+      badge: forest.data?.liveAlerts && forest.data.liveAlerts.length > 0
+        ? 'Live Ingestion Active'
+        : forest.data?.syncStatus?.status === 'unauthorized'
+        ? 'API Key Unauthorized (401/403)'
+        : forest.data?.syncStatus?.status === 'failed'
+        ? 'Sync Failed'
+        : 'Reference Baseline Active',
+      status: forest.data?.liveAlerts && forest.data.liveAlerts.length > 0
+        ? 'live'
+        : forest.data?.syncStatus?.status === 'unauthorized'
+        ? 'unavailable'
+        : 'reference',
       description:
-        'Curated baseline catalog of primary tropical forest loss fronts and critical biodiversity corridors facing chronic agricultural, logging, or charcoal displacement.',
+        'Official integration with the Global Forest Watch Data API delivering near-real-time integrated deforestation alerts for Indian forest AOIs (Western Ghats, Sundarbans, Karbi Anglong, Satpura-Maikal). A curated baseline catalog of Indian protected biomes is preserved as permanent reference telemetry.',
       specs: [
-        { label: 'Dataset Classification', value: 'Peer-reviewed baseline reference catalog' },
-        { label: 'Loss Drivers', value: 'Cattle Ranching, Oil Palm, Soy Expansion, Charcoal, Logging' },
-        { label: 'Biome Representation', value: 'Amazon Basin, Cerrado, Gran Chaco, Congo Basin, Sumatra, Borneo' },
-        { label: 'Hotspot Count', value: `${forest.data?.points?.length || 16} curated critical surveillance zones` },
-        { label: 'Nature of Data', value: 'Static curated reference (NOT live satellite feed)' },
+        { label: 'API Endpoint', value: 'https://data-api.globalforestwatch.org' },
+        { label: 'Integrated Dataset', value: 'gfw_integrated_alerts (latest version)' },
+        { label: 'Authentication Header', value: 'x-api-key: [SECURE_IN_ENV]' },
+        { label: 'Ingestion Architecture', value: 'Background SQLite pipeline with deduplication' },
+        {
+          label: 'Sync Status',
+          value: forest.data?.syncStatus?.status
+            ? `Status: ${forest.data.syncStatus.status.toUpperCase()}${forest.data.syncStatus.error_message ? ` (${forest.data.syncStatus.error_message})` : ''}`
+            : 'Idle / Polling Standby',
+        },
+        {
+          label: 'Last Synchronized',
+          value: forest.data?.syncStatus?.last_success_at
+            ? new Date(forest.data.syncStatus.last_success_at).toLocaleString()
+            : 'Pending API Key Grant',
+        },
+        {
+          label: 'Live Alert Ingestion',
+          value: `${forest.data?.liveAlerts?.length || 0} alerts stored in database`,
+        },
+        {
+          label: 'Curated Indian Biomes',
+          value: `${forest.data?.points?.length || 12} protected forest landscapes`,
+        },
       ],
-      attribution: 'World Resources Institute / Global Forest Watch & University of Maryland',
-      endpoint: '/api/v1/deforestation',
-      link: 'https://www.globalforestwatch.org/',
+      attribution: 'World Resources Institute / Global Forest Watch & UMD GLAD Lab',
+      endpoint: '/api/v1/deforestation · /api/v1/gfw/alerts · /api/v1/gfw/sync',
+      link: 'https://data-api.globalforestwatch.org/',
     },
     {
       id: 'gemini',
-      name: 'Google Gemini 1.5 & Rule-Based Synthesis Engine',
+      name: 'Google Gemini & Rule-Based Synthesis Engine',
       icon: Sparkles,
       badge: 'Neural Analysis',
       status: 'live',
       description:
         'Multivariate environmental reasoning engine synthesizing spatial proximity vectors, active particulate dispersion, and ecological threat dynamics into actionable mitigation briefings.',
       specs: [
-        { label: 'Foundation Model', value: 'Gemini 1.5 Flash (or deterministic offline rule-based fallback)' },
+        { label: 'Foundation Model', value: 'Gemini Foundation Models (or deterministic offline rule-based fallback)' },
         { label: 'Input Grounding', value: 'Strictly bounded to active FIRMS, CAMS, and GFW vectors within radius' },
         { label: 'Analysis Output', value: 'Situation assessment, potential impacts, and recommended mitigations' },
         { label: 'Rate Control', value: '8 syntheses per minute rate-limited with fallback resilience' },
@@ -194,6 +224,85 @@ export const DataSourcesPage: React.FC = () => {
             </div>
           );
         })}
+      </div>
+
+      {/* 3. India Forest Coverage & Surveillance Grid */}
+      <div className="p-6 sm:p-7 rounded-xl bg-[#101F18] border border-emerald-950 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-emerald-950/80">
+          <div className="flex items-start gap-3.5">
+            <div className="w-12 h-12 rounded-xl bg-[#174C34]/50 border border-emerald-600/60 text-emerald-400 flex items-center justify-center shrink-0 shadow-sm">
+              <TreeDeciduous className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-[20px] font-bold text-[#F2F5F2]">National Forest Surveillance &amp; Spatial Coverage Grid</h3>
+              <p className="text-[14px] text-[#9CAEA2] mt-0.5">
+                Active AOI bounds, surveillance status, and regional coverage across India's 7 ecological zones
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 rounded-md text-[12px] font-mono font-bold uppercase bg-emerald-950/80 text-emerald-300 border border-emerald-800/60">
+              12 Active AOIs Monitored
+            </span>
+          </div>
+        </div>
+
+        {/* Coverage Disclaimer Alert */}
+        <div className="p-4 rounded-lg bg-[#0D1914] border border-amber-900/60 text-amber-200/90 text-[14px] leading-relaxed flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <strong className="text-amber-300 font-semibold">Surveillance Coverage &amp; Data Honesty Notice: </strong>
+            Near-real-time satellite surveillance is concentrated over 12 defined high-risk biodiversity and tiger corridors. Areas outside these bounds are unmonitored by NRT sensors; absence of alerts in unmonitored zones reflects lack of active sensor sampling, NOT absence of deforestation. Full national canopy assessments rely on the biennial Forest Survey of India (ISFR) census.
+          </div>
+        </div>
+
+        {/* Table of Monitored vs Unmonitored Zones */}
+        <div className="overflow-x-auto rounded-lg border border-emerald-950/80">
+          <table className="w-full text-left border-collapse text-[14px]">
+            <thead>
+              <tr className="bg-[#0D1914] border-b border-emerald-950 text-[#9CAEA2] text-[13px] uppercase tracking-wider">
+                <th className="py-3 px-4 font-semibold">Ecological Zone</th>
+                <th className="py-3 px-4 font-semibold">Corridor Name</th>
+                <th className="py-3 px-4 font-semibold">State / Region</th>
+                <th className="py-3 px-4 font-semibold">Surveillance Type</th>
+                <th className="py-3 px-4 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-emerald-950/60 text-[#CBDAD0]">
+              {[
+                { zone: 'Western Ghats', name: 'Nilgiri & Wayanad Corridor', state: 'Kerala / Karnataka / TN', type: 'GFW Integrated NRT (40x40km)', status: 'Active' },
+                { zone: 'Western Ghats', name: 'Koyna-Mahabaleshwar Corridor', state: 'Maharashtra', type: 'GFW Integrated NRT (40x40km)', status: 'Active' },
+                { zone: 'Western Ghats', name: 'Anamalai & Periyar Corridor', state: 'Kerala / Tamil Nadu', type: 'GFW Integrated NRT (40x40km)', status: 'Active' },
+                { zone: 'Sundarbans', name: 'Sundarbans Mangrove Delta', state: 'West Bengal', type: 'GFW Integrated NRT (40x40km)', status: 'Active' },
+                { zone: 'Northeast India', name: 'Karbi Anglong & Kaziranga Foothills', state: 'Assam', type: 'GFW Integrated NRT (40x40km)', status: 'Active' },
+                { zone: 'Northeast India', name: 'Dampa & Western Mizoram Hills', state: 'Mizoram', type: 'GFW Integrated NRT (40x40km)', status: 'Active' },
+                { zone: 'Central India', name: 'Satpura-Maikal Kanha Corridor', state: 'Madhya Pradesh', type: 'GFW Integrated NRT (40x40km)', status: 'Active' },
+                { zone: 'Central India', name: 'Bastar & Dandakaranya Dense Forest', state: 'Chhattisgarh', type: 'GFW Integrated NRT (40x40km)', status: 'Active' },
+                { zone: 'Eastern India', name: 'Saranda Dense Sal Forest Belt', state: 'Jharkhand / Odisha', type: 'GFW Integrated NRT (40x40km)', status: 'Active' },
+                { zone: 'Eastern India', name: 'Similipal Biosphere Reserve Core', state: 'Odisha', type: 'GFW Integrated NRT (40x40km)', status: 'Active' },
+                { zone: 'Himalayan Belt', name: 'Rajaji-Corbett Shivalik Foothills', state: 'Uttarakhand', type: 'GFW Integrated NRT (40x40km)', status: 'Active' },
+                { zone: 'Island Ecosystem', name: 'Great Nicobar Biosphere Reserve', state: 'Andaman & Nicobar', type: 'GFW Integrated NRT (40x40km)', status: 'Active' },
+                { zone: 'All Other Zones', name: 'Inter-corridor rural/urban forestry tracts', state: 'Pan-India', type: 'Biennial FSI Census Baselines', status: 'Unmonitored in NRT' },
+              ].map((row, idx) => (
+                <tr key={idx} className="hover:bg-[#14251C]/60 transition-colors">
+                  <td className="py-3 px-4 font-semibold text-[#F2F5F2]">{row.zone}</td>
+                  <td className="py-3 px-4">{row.name}</td>
+                  <td className="py-3 px-4 text-[#9CAEA2]">{row.state}</td>
+                  <td className="py-3 px-4 font-mono text-[13px]">{row.type}</td>
+                  <td className="py-3 px-4">
+                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase ${
+                      row.status === 'Active'
+                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                        : 'bg-[#1a231f] text-[#8ea395] border border-emerald-950'
+                    }`}>
+                      {row.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

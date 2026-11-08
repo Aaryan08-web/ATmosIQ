@@ -17,7 +17,11 @@ export const config = {
   cookieSecure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : isProd,
   dbPath: process.env.DB_PATH ?? './data/atmosiq.db',
   firmsKey: process.env.FIRMS_MAP_KEY ?? '',
+  firmsDefaultSource: process.env.FIRMS_DEFAULT_SOURCE ?? 'VIIRS_NOAA20_NRT',
   gfwKey: process.env.GFW_API_KEY ?? '',
+  appUrl: process.env.APP_URL ?? '',
+  gfwOrigin: process.env.GFW_API_ORIGIN ?? process.env.APP_URL ?? 'http://localhost:3000',
+  gfwSyncIntervalMinutes: Number(process.env.GFW_SYNC_INTERVAL_MINUTES) || 360,
   // Comma-separated emails that receive the 'admin' role when they sign up.
   adminEmails: (process.env.ADMIN_EMAILS ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean),
   geminiKey: process.env.GEMINI_API_KEY ?? '',

@@ -330,7 +330,7 @@ const SearchControl: React.FC<{
 
         try {
           const response = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`
+            `https://nominatim.openstreetmap.org/search?format=json&countrycodes=in&q=${encodeURIComponent(query)}`
           );
           const results = await response.json();
 
@@ -401,8 +401,8 @@ const SearchControl: React.FC<{
 
 // Main AdvancedMap component
 export const AdvancedMap: React.FC<AdvancedMapProps> = ({
-  center = [51.505, -0.09],
-  zoom = 13,
+  center = [22.5, 82.0], // Centered over India
+  zoom = 5,
   markers = [],
   polygons = [],
   circles = [],
@@ -543,6 +543,8 @@ export const AdvancedMap: React.FC<AdvancedMapProps> = ({
       <MapContainer
         center={center}
         zoom={zoom}
+        minZoom={4}
+        maxBounds={[[5.0, 65.0], [38.5, 100.0]]}
         zoomControl={false}
         style={{ height: "100%", width: "100%", background: "#0B1713" }}
         scrollWheelZoom={true}

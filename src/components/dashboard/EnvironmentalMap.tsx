@@ -118,7 +118,7 @@ export const EnvironmentalMap: React.FC<EnvironmentalMapProps> = ({
       });
     }
 
-    // 3. Deforestation Hotspots
+    // 3. Deforestation Hotspots (Curated Reference)
     if (activeLayers.forest && forest?.points) {
       forest.points.forEach((p) => {
         list.push({
@@ -129,8 +129,9 @@ export const EnvironmentalMap: React.FC<EnvironmentalMapProps> = ({
           category: 'forest',
           color: '#a855f7',
           badge: `${p.severity} Loss`,
-          description: `Primary Driver: ${p.driver}. Biome: ${p.biome}.`,
+          description: `Primary Driver: ${p.driver}. Biome: ${p.biome}. Curated baseline reference catalog.`,
           measurements: [
+            { label: 'Type', value: 'Curated Reference Hotspot' },
             { label: 'Severity', value: p.severity },
             { label: 'Driver', value: p.driver },
             { label: 'Biome', value: p.biome },
@@ -139,6 +140,33 @@ export const EnvironmentalMap: React.FC<EnvironmentalMapProps> = ({
           source: 'Global Forest Watch (Ref)',
           updatedAt: 'Curated dataset',
           raw: p,
+        });
+      });
+    }
+
+    // 3b. Live GFW Ingested Forest Loss Alerts
+    if (activeLayers.forest && forest?.liveAlerts) {
+      forest.liveAlerts.forEach((a) => {
+        const isHigh = a.confidence === 'high';
+        list.push({
+          id: `gfw-live-${a.alert_id}`,
+          lat: a.latitude,
+          lon: a.longitude,
+          title: `GFW Alert: ${a.location_name || 'Canopy Loss Cluster'}`,
+          category: isHigh ? 'critical' : 'forest',
+          color: isHigh ? '#d946ef' : '#c084fc',
+          badge: `${a.confidence} Deforestation Alert`,
+          description: `Satellite canopy disturbance detected on ${a.alert_date} (dataset: ${a.dataset}).`,
+          measurements: [
+            { label: 'Alert Type', value: 'Live Satellite Ingestion' },
+            { label: 'Detection Date', value: a.alert_date },
+            { label: 'Confidence', value: a.confidence },
+            { label: 'Area Disturbed', value: a.area_ha ? `${a.area_ha.toFixed(1)} ha` : 'Sensor Pixel' },
+            { label: 'Dataset', value: `${a.dataset} (${a.version})` },
+          ],
+          source: 'Global Forest Watch (Integrated NRT)',
+          updatedAt: a.retrieved_at ? new Date(a.retrieved_at).toLocaleTimeString() : 'Synchronized',
+          raw: a,
         });
       });
     }
@@ -160,7 +188,7 @@ export const EnvironmentalMap: React.FC<EnvironmentalMapProps> = ({
     }
 
     return list;
-  }, [activeLayers, air?.points, fires?.points, fires?.source, fires?.fetchedAt, forest?.points, activeSelected]);
+  }, [activeLayers, air?.points, fires?.points, fires?.source, fires?.fetchedAt, forest?.points, forest?.liveAlerts, activeSelected]);
 
   // Circles for Proximity Analysis Radius (150 km spatial proximity radius around selected location)
   const mapCircles = useMemo<MapCircle[]>(() => {
@@ -176,48 +204,99 @@ export const EnvironmentalMap: React.FC<EnvironmentalMapProps> = ({
     ];
   }, [activeLayers.riskZones, activeSelected]);
 
-  // Curated Environmental Reference Biome Polygons (Global Forest Watch reference data)
+  // Curated Indian Ecological Biome Boundaries & Risk Corridors
   const mapPolygons = useMemo<MapPolygon[]>(() => {
     if (!activeLayers.riskZones) return [];
-    return [
+    const base: MapPolygon[] = [
       {
-        id: 'cerrado-risk-zone',
-        name: 'Cerrado Reference Biome (GFW Ecological Boundary)',
+        id: 'western-ghats-corridor',
+        name: 'Western Ghats UNESCO Biodiversity Corridor',
         coordinates: [
           [
-            [-50.5, -14.0],
-            [-46.0, -14.0],
-            [-46.0, -11.0],
-            [-50.5, -11.0],
-            [-50.5, -14.0],
+            [73.2, 18.5],
+            [74.5, 18.5],
+            [77.5, 8.5],
+            [76.8, 8.2],
+            [74.5, 14.5],
+            [73.2, 18.5],
+          ],
+        ],
+        color: '#10b981',
+        fillOpacity: 0.15,
+        strokeColor: '#34d399',
+        strokeWidth: 1.5,
+        popup: 'Protected Indian Ecological Corridor',
+      },
+      {
+        id: 'sundarbans-reserve',
+        name: 'Sundarbans Mangrove Biosphere Reserve',
+        coordinates: [
+          [
+            [88.3, 21.6],
+            [89.1, 21.6],
+            [89.1, 22.3],
+            [88.3, 22.3],
+            [88.3, 21.6],
+          ],
+        ],
+        color: '#06b6d4',
+        fillOpacity: 0.15,
+        strokeColor: '#22d3ee',
+        strokeWidth: 1.5,
+        popup: 'Coastal Mangrove Delta Buffer',
+      },
+      {
+        id: 'indo-gangetic-corridor',
+        name: 'Indo-Gangetic Atmospheric Particulate Corridor',
+        coordinates: [
+          [
+            [74.5, 31.5],
+            [88.0, 26.0],
+            [88.0, 24.5],
+            [76.5, 28.0],
+            [74.5, 31.5],
           ],
         ],
         color: '#ef4444',
         fillOpacity: 0.12,
         strokeColor: '#f87171',
         strokeWidth: 1.5,
-        category: 'Reference Ecological Boundary',
+        popup: 'Atmospheric Particulate Concentration Zone',
       },
       {
-        id: 'gran-chaco-risk-zone',
-        name: 'Gran Chaco Reference Biome (GFW Ecological Boundary)',
+        id: 'central-india-forest-belt',
+        name: 'Central Indian Forest & Wildlife Corridor',
         coordinates: [
           [
-            [-63.5, -24.0],
-            [-59.5, -24.0],
-            [-59.5, -20.0],
-            [-63.5, -20.0],
-            [-63.5, -24.0],
+            [79.5, 21.5],
+            [83.0, 21.5],
+            [83.0, 23.5],
+            [79.5, 23.5],
+            [79.5, 21.5],
           ],
         ],
-        color: '#f97316',
-        fillOpacity: 0.1,
-        strokeColor: '#fb923c',
+        color: '#a855f7',
+        fillOpacity: 0.14,
+        strokeColor: '#c084fc',
         strokeWidth: 1.5,
-        category: 'Reference Ecological Boundary',
+        popup: 'Central Indian Forest Ecosystem Buffer',
       },
     ];
-  }, [activeLayers.riskZones]);
+
+    const aoiPolygons: MapPolygon[] = (forest?.monitoredAois ?? []).map((aoi) => ({
+      id: `aoi-${aoi.id}`,
+      name: `${aoi.name} (Active NRT Surveillance AOI)`,
+      coordinates: aoi.geometry.coordinates,
+      color: '#059669',
+      fillOpacity: 0.2,
+      strokeColor: '#34d399',
+      strokeWidth: 2,
+      category: 'Active GFW NRT Surveillance AOI',
+      popup: `${aoi.name} · ${aoi.state} (Active GFW NRT Surveillance AOI ~40x40km. Unmonitored outside bounds)`,
+    }));
+
+    return [...base, ...aoiPolygons];
+  }, [activeLayers.riskZones, forest?.monitoredAois]);
 
   // Handle marker click
   const handleMarkerClick = (marker: MapMarker) => {
@@ -225,7 +304,7 @@ export const EnvironmentalMap: React.FC<EnvironmentalMapProps> = ({
     const idStr = String(marker.id);
     if (idStr.startsWith('aq-')) kind = 'air';
     else if (idStr.startsWith('fire-')) kind = 'fire';
-    else if (idStr.startsWith('forest-')) kind = 'forest';
+    else if (idStr.startsWith('forest-') || idStr.startsWith('gfw-live-')) kind = 'forest';
 
     handleSelect({
       name: marker.title || 'Feature Location',
@@ -273,12 +352,13 @@ export const EnvironmentalMap: React.FC<EnvironmentalMapProps> = ({
             counts={{
               air: air?.points?.length || 45,
               fires: fires?.points?.length || 0,
-              forest: forest?.points?.length || 0,
+              forest: (forest?.points?.length || 0) + (forest?.liveAlerts?.length || 0),
               riskZones: mapPolygons.length,
             }}
             liveStatuses={{
               fires: fires?.live,
               air: air?.live,
+              forest: !!(forest?.liveAlerts && forest.liveAlerts.length > 0) || forest?.syncStatus?.status === 'success',
             }}
           />
         </div>
@@ -286,8 +366,8 @@ export const EnvironmentalMap: React.FC<EnvironmentalMapProps> = ({
         {/* The Advanced Map Instance */}
         <div className="relative">
           <AdvancedMap
-            center={[18.5204, 73.8567]} // Pune, Maharashtra
-            zoom={11}
+            center={[22.5, 82.0]} // Center of the Republic of India
+            zoom={5}
             markers={mapMarkers}
             polygons={mapPolygons}
             circles={mapCircles}

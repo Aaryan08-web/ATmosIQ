@@ -28,28 +28,42 @@ export const AiBriefPage: React.FC = () => {
       lat: 28.6139,
       lon: 77.2090,
       kind: 'point',
-      details: ['Urban Particulate Dispersion Center', 'CAMS South Asia'],
+      details: ['Indo-Gangetic Basin Particulate Dispersion Center', 'CAMS Atmospheric Model'],
     },
     {
-      name: 'Sumatra Peatland Basin',
-      lat: 0.5333,
-      lon: 101.4500,
+      name: 'Pune & Western Ghats Foothills',
+      lat: 18.5204,
+      lon: 73.8567,
       kind: 'point',
-      details: ['NASA FIRMS VIIRS Active Fire surveillance zone'],
-    },
-    {
-      name: 'Cerrado Forest Frontier',
-      lat: -12.1500,
-      lon: -45.0000,
-      kind: 'point',
-      details: ['Global Forest Watch curated loss front'],
+      details: ['Deccan Plateau urban-forest interface', 'CAMS live atmospheric feed'],
     },
     {
       name: 'Mumbai Coastal Air Observatory',
       lat: 19.0760,
       lon: 72.8777,
       kind: 'point',
-      details: ['Arabian Sea coastal boundary layer'],
+      details: ['Arabian Sea coastal boundary layer', 'Metropolitan emissions corridor'],
+    },
+    {
+      name: 'Sundarbans Mangrove Delta',
+      lat: 21.9500,
+      lon: 88.8500,
+      kind: 'point',
+      details: ['Tidal mangrove forest delta buffer', 'Coastal salinity and cyclone vulnerability'],
+    },
+    {
+      name: 'Western Ghats · Nilgiri Biosphere',
+      lat: 11.4500,
+      lon: 76.6500,
+      kind: 'point',
+      details: ['UNESCO World Heritage tropical evergreen corridor', 'GFW satellite surveillance AOI'],
+    },
+    {
+      name: 'Bengaluru Tech & Ecological Hub',
+      lat: 12.9716,
+      lon: 77.5946,
+      kind: 'point',
+      details: ['Southern plateau watershed & urban heat island monitoring'],
     },
   ];
 
@@ -92,7 +106,7 @@ export const AiBriefPage: React.FC = () => {
               <h2 className="text-base font-bold text-[#F2F5F2]">AI-Synthesized Environmental Risk Brief</h2>
             </div>
             <p className="text-xs text-[#9CAEA2] mt-0.5">
-              Automated planetary intelligence briefing grounded in active sensor data (FIRMS fires, CAMS air dispersion, GFW biomes).
+              Automated Indian environmental risk intelligence briefing grounded in active sensor data (FIRMS fires, CAMS air dispersion, GFW Indian forest AOIs).
             </p>
           </div>
 

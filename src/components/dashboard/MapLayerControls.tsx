@@ -15,6 +15,7 @@ interface LayerControlsProps {
   liveStatuses?: {
     fires?: boolean;
     air?: boolean;
+    forest?: boolean;
   };
 }
 
@@ -54,7 +55,7 @@ export const MapLayerControls: React.FC<LayerControlsProps> = ({
       icon: TreeDeciduous,
       color: '#a855f7',
       count: counts?.forest,
-      badge: 'GFW Ref',
+      badge: liveStatuses?.forest ? 'Live NRT' : 'GFW Ref',
     },
     {
       key: 'riskZones',

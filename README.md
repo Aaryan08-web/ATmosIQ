@@ -1,55 +1,103 @@
-# ATmosIQ — Environmental Intelligence Platform
+# ATmosIQ — Sovereign India-Only Environmental Intelligence Platform
 
-Live fires (NASA FIRMS), air quality (Open-Meteo) and forest-loss hotspots on one interactive globe, with AI risk briefs (Gemini).
+AI-powered multi-sensor environmental intelligence platform strictly restricted to the sovereign territory of the Republic of India:
+- **Active Fires**: NASA FIRMS VIIRS (NOAA-20, NOAA-21, S-NPP) and MODIS near-real-time satellite detections bounded to sovereign Indian borders.
+- **Atmospheric Quality**: Copernicus Atmosphere Monitoring Service (CAMS) modelled multi-pollutant reanalysis & forecast extractions (US AQI, PM2.5, PM10, NO2, SO2, CO, O3) across 58 urban centers spanning all 28 Indian States and 8 Union Territories.
+- **Deforestation & Canopy Loss**: Global Forest Watch (GFW) near-real-time satellite alert ingestion across 12 high-priority Indian forest AOIs, complemented by 12 curated national protected biomes and Forest Survey of India (ISFR) canopy baselines.
+- **Neural Reasoning**: Google Gemini spatial risk synthesis with deterministic offline rule-based fallback.
 
-**Stack:** React 19 · Vite · Tailwind 4 · React Router · MapLibre · Motion · Express · SQLite · Gemini
+**Stack:** React 19 · Vite · Tailwind 4 · React Router · Leaflet / MapLibre · Motion · Express · SQLite (WAL mode) · Google Gemini
 
 ## Run locally
 ```bash
 npm install
-cp .env.example .env        # add FIRMS_MAP_KEY and GEMINI_API_KEY (both optional for a first run)
+cp .env.example .env        # add FIRMS_MAP_KEY, GEMINI_API_KEY, GFW_API_KEY (optional for initial run)
 npm run dev                 # web on :3000, API on :8080
 ```
-Gemini note: Google limits `gemini-2.5-*` to accounts that already used them, so the default is `gemini-3.8-flash`; override with `GEMINI_MODEL` if Google changes names again.
 
-Without keys the app still runs: fires show clearly-labelled **sample** data and AI briefs fall back to a rule-based summary (also labelled).
+Without keys the app runs with honest fallbacks: fires report explicitly-labelled **sample** data, GFW reports curated reference reserves, and AI briefs fall back to the deterministic rule-based engine.
+
+## Production Environment Variables
+| Variable | Description | Default / Example |
+|---|---|---|
+| `NODE_ENV` | Environment mode (`production` or `development`) | `production` |
+| `PORT` | HTTP port for the unified Express server | `8080` |
+| `JWT_SECRET` | Mandatory in production: HMAC SHA-256 signing key | `openssl rand -hex 32` |
+| `COOKIE_SECURE` | Set `true` when behind HTTPS / TLS termination | `true` |
+| `DB_PATH` | Path to persistent SQLite database file | `/data/atmosiq.db` or `./data/atmosiq.db` |
+| `ADMIN_EMAILS` | Comma-separated emails assigned the `admin` role upon registration | `admin@atmosiq.gov.in` |
+| `FIRMS_MAP_KEY` | NASA FIRMS API key for live VIIRS/MODIS satellite passes | `[NASA_MAP_KEY]` |
+| `FIRMS_DEFAULT_SOURCE`| Satellite sensor constellation | `VIIRS_NOAA20_NRT` |
+| `GEMINI_API_KEY` | Google Gemini API key for AI environmental briefs | `[AI_STUDIO_KEY]` |
+| `GEMINI_MODEL` | Gemini foundation model designation | `gemini-3.8-flash` |
+| `GFW_API_KEY` | Global Forest Watch Data API key | `[WRI_GFW_KEY]` |
+| `GFW_API_ORIGIN` | Allowed domain origin registered in WRI Developer Portal allowlist | `http://localhost:3000` (dev) or `https://your-domain.com` (prod) |
+| `GFW_SYNC_INTERVAL_MINUTES` | Frequency of background GFW satellite alert polling | `360` (every 6 hours) |
+
+### Important Note on Global Forest Watch (GFW) Domain Allowlists
+GFW API keys issued by the World Resources Institute (WRI) enforce domain origin restrictions. Ensure your deployed production domain (e.g. `https://your-domain.com`) is added to your account's allowed domain list on `data-api.globalforestwatch.org`. In development, configure `GFW_API_ORIGIN=http://localhost:3000`.
 
 ## Scripts
 | Command | What it does |
 |---|---|
-| `npm run dev` | Web (:3000) and API (:8080) together |
-| `npm run lint` | TypeScript checks for the front end and the server |
-| `npm test` | API test suite (auth, lockout, roles, data routes, AI fallback); no network or keys needed |
-| `npm run build` | Production build: front end into `dist/`, compiled server into `dist-server/` |
-| `npm start` | Runs the compiled server in production mode (run `npm run build` first; works on Windows too) |
+| `npm run dev` | Web (:3000) and API (:8080) concurrent development |
+| `npm run lint` | Strict TypeScript compilation checks for frontend and backend |
+| `npm test` | Hermetic test suite (23 tests: auth, lockout, boundary checks, data routing, GFW worker) |
+| `npm run build` | Full production build: client into `dist/`, server into `dist-server/` |
+| `npm start` | Runs the compiled server in production mode serving static client and APIs on `:8080` |
 
-CI (`.github/workflows/ci.yml`) runs lint, tests and build on every push and pull request.
-
-**Admin role:** list emails in `ADMIN_EMAILS` (comma-separated) and they become `admin` when they sign up. Admins can call `GET /api/v1/admin/users`. Everyone else is an `analyst`.
-
-## Data honesty
-| Layer | Source | Status |
-|---|---|---|
-| Fires | NASA FIRMS VIIRS NRT | Live with `FIRMS_MAP_KEY`, sample otherwise |
-| Air quality | Open-Meteo (CAMS) | Live, 45 cities |
-| Deforestation | Curated Global Forest Watch-based list | Reference data, not live |
-
-## Deploy to AWS (single EC2 instance)
-1. Launch Ubuntu 22.04/24.04 `t3.small`+; security group: allow 22 (your IP) and 80/443 (or 8080 for a quick demo).
-2. `sudo apt update && sudo apt install -y docker.io git && sudo usermod -aG docker $USER` (re-login).
-3. Copy the project to the server (git clone or scp), create `.env` from `.env.example` with a real `JWT_SECRET`. If not using HTTPS yet, set `COOKIE_SECURE=false`.
-4. ```bash
-   docker build -t atmosiq .
-   docker run -d --restart unless-stopped --name atmosiq -p 80:8080 --env-file .env -v atmosiq-data:/data atmosiq
+## Deploy to Production (Docker & AWS EC2)
+1. Launch Ubuntu 22.04/24.04 LTS instance with security group ports 80/443 (HTTP/HTTPS) and 22 (SSH).
+2. Install Docker: `sudo apt update && sudo apt install -y docker.io git`.
+3. Clone repository and configure `.env`:
+   ```bash
+   cp .env.example .env
+   # Set JWT_SECRET, COOKIE_SECURE=true, GFW_API_ORIGIN=https://your-domain.com
    ```
-5. Open `http://<EC2 public IP>`. Health check: `/api/health` (the image also has a Docker `HEALTHCHECK`, and runs as the unprivileged `node` user).
-For HTTPS, put the instance behind an Application Load Balancer with an ACM certificate, then set `COOKIE_SECURE=true`.
+4. Build and start container with persistent SQLite volume:
+   ```bash
+   docker build -t atmosiq .
+   docker run -d --restart unless-stopped \
+     --name atmosiq \
+     -p 80:8080 \
+     --env-file .env \
+     -v atmosiq-data:/data \
+     atmosiq
+   ```
+5. Health check endpoint: `http://<HOST>:8080/api/health`.
 
-## Project layout
+### Reverse Proxy Configuration (Nginx HTTPS Termination)
+```nginx
+server {
+    listen 80;
+    server_name atmosiq.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name atmosiq.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/atmosiq.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/atmosiq.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
 ```
-src/app        router, auth context, guards, fallbacks
-src/pages      route entry points
-src/features   map, dashboard (feature code)
-src/components landing, auth, ui
-server/        Express API: auth, data, AI
-```
+
+## Data Provenance & Honesty Architecture
+| Layer | Upstream Source | Scope & Methodology | Honesty & Attribution Guarantee |
+|---|---|---|---|
+| **Fires** | NASA FIRMS VIIRS & MODIS | Sovereign India Bounding Box (`68.0, 6.5, 97.5, 37.5`) | `live: true` when key is active. Explicitly marked `status: 'sample'` and `isDemo: true` when running offline. |
+| **Air Quality** | Open-Meteo & Copernicus CAMS | 58 cities spanning all 28 States & 8 UTs | Modelled atmospheric composition reanalysis ($0.1^\circ$ grid extraction), NOT raw ground CAAQMS sensors. |
+| **Deforestation** | Global Forest Watch (NRT) & FSI | 12 Monitored AOIs + 12 Protected Reference Biomes | 159 NRT satellite alerts ingested. Areas outside active AOIs explicitly marked unmonitored; never interpreted as zero canopy loss. |
+| **AI Briefs** | Google Gemini (`gemini-3.8-flash`) | Context bounded to verified telemetry | Deterministic rule-based fallback when offline or rate-limited. |

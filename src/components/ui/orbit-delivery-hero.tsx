@@ -1059,43 +1059,43 @@ var SceneBoundary = class extends Component {
 };
 var stories = {
   "Capabilities": {
-    title: "Autonomous Planetary Risk Intelligence.",
+    title: "India-Focused Autonomous Environmental Intelligence.",
     paragraphs: [
-      "High-cadence multi-sensor observation pipelines analyzing ecosystem vulnerability, carbon displacement, and ecological threat dynamics in real time.",
-      "Synthetic Aperture Radar (SAR) penetrates persistent cloud cover across equatorial rainforests, detecting canopy fragmentation, unauthorized logging, and road incursions in under 48 hours.",
-      "Atmospheric shortwave infrared spectrometers isolate fugitive methane and greenhouse gas plumes from industrial and natural outgassing zones globally with sub-daily alert triggers."
+      "High-cadence multi-sensor observation pipelines analyzing ecosystem vulnerability, agricultural fire regimes, and atmospheric pollution dynamics across all 28 Indian States and 8 Union Territories.",
+      "Satellite radar and optical passes monitor the Western Ghats, Northeast India, Central Highlands, and Sundarbans to detect canopy disturbance, habitat fragmentation, and ecological stress.",
+      "Copernicus CAMS atmospheric chemistry modeling integrates satellite assimilation and meteorological reanalysis to track PM2.5, PM10, NO2, SO2, CO, and Ozone with sub-daily resolution across India."
     ]
   },
   "Features": {
-    title: "Environmental Intelligence, Powered by AI.",
+    title: "Environmental Intelligence for India, Powered by AI.",
     paragraphs: [
-      "Transforming environmental and atmospheric data into actionable intelligence to identify vulnerable zones, predict emerging environmental risks, and support smarter environmental decisions.",
-      "Environmental Monitoring & Geospatial Mapping: Continuous observation across multi-spectral radar and optical layers identifying high-risk geographic stress points.",
-      "AI Risk Prediction & Smart Interventions: Predictive modeling that forecasts threats and helps prioritize critical conservation zones requiring rapid intervention."
+      "Transforming raw NASA FIRMS, Copernicus CAMS, and Global Forest Watch telemetry into actionable intelligence to identify vulnerable Indian districts, forecast emerging risks, and support evidence-based decisions.",
+      "All-India Environmental Monitoring & Mapping: Continuous observation across 58 metropolitan nodes and custom coordinates across Indian sovereign territory.",
+      "AI Risk Synthesis & Grounded Mitigation: Neural analysis powered by Google Gemini, grounded strictly in validated Indian spatial observations."
     ]
   },
   "Planetary Risk Vectors": {
-    title: "Biosphere Threat & Vulnerability Vectors.",
+    title: "India Ecological Vulnerability & Risk Vectors.",
     paragraphs: [
-      "Tropical Forest Canopy Loss: Continuous radar and optical telemetry isolates mechanized logging and biomass loss across the Amazon Basin, Congo Rainforest, and Southeast Asia.",
-      "Cryosphere Permafrost Degassing: Hyperspectral spectrometry tracks sub-surface thaw craters and sudden CH4 releases across Canadian and Siberian sub-Arctic permafrost belts.",
-      "Marine Thermal Vulnerability: Sea surface temperature anomaly modeling predicts mass coral bleaching thresholds up to 4 weeks prior to visual onset across the Great Barrier Reef and Coral Triangle."
+      "Western Ghats & Montane Ecosystems: Continuous satellite observation tracking canopy integrity across Nilgiris, Wayanad, Anamalai, and Sahyadri biodiversity corridors.",
+      "Indo-Gangetic Atmospheric Basin: Hourly multi-pollutant dispersion tracking hazardous PM2.5, PM10, and thermal inversions across Punjab, Haryana, Delhi NCR, UP, and Bihar.",
+      "Sundarbans Tidal Mangrove Delta: Coastal halophytic forest surveillance tracking storm surge buffer loss, salinity intrusion, and mangrove ecosystem health."
     ]
   },
   "Satellite Grid": {
-    title: "Synchronized Earth Observation Constellations.",
+    title: "Synchronized Earth Observation Constellations Over India.",
     paragraphs: [
-      "Sentinel-1A/B: C-Band Synthetic Aperture Radar provides all-weather, day-and-night surface deformation and radar backscatter tracking with a 6-day repeat orbit.",
-      "Sentinel-2A/B: 13-band multispectral imaging captures red-edge vegetation indices, canopy chlorophyll absorption, and inland water turbidity at 10m spatial resolution.",
-      "NASA Landsat-9 & Sentinel-5P: Calibrated thermal infrared radiometry combined with TROPOMI atmospheric column sounding for global greenhouse gas and aerosol tracking."
+      "NASA NOAA-20, NOAA-21 & Suomi-NPP: VIIRS 375m active fire radiometry capturing agricultural residue burns and thermal anomalies across India twice daily.",
+      "Sentinel-2A/B & Landsat: High-resolution multispectral imaging capturing vegetation indices and canopy disturbance across Indian forest reserves at 10m–30m resolution.",
+      "Copernicus CAMS Global Atmospheric Composition: Assimilated multi-pollutant reanalysis providing reliable particulate and gaseous pollutant vectors across the Indian subcontinent."
     ]
   },
   "Science & Compliance": {
-    title: "Scientific Rigor & International Compliance.",
+    title: "Scientific Rigor & Indian Environmental Standards.",
     paragraphs: [
-      "IPCC AR6 Calibration: Calculations for Global Warming Potential (GWP-100) and radiative forcing are calibrated directly against the IPCC Sixth Assessment Report methodology.",
-      "UN SDG 13 & 15 Auditing: Verifiable reporting metrics structured for corporate ESG and sovereign compliance with United Nations Climate Action and Life on Land frameworks.",
-      "Cryptographic Provenance: Satellite observation tiles and threat alerts carry immutable cryptographic verification signatures preventing retrospective data alteration."
+      "Authoritative Atmospheric Standards: Transparent multi-pollutant breakpoint tracking adhering to international US AQI and CPCB comparative air-quality standards.",
+      "Forest Survey & Biodiversity Alignment: Reference biomes structured around documented Indian conservation zones and National Parks under MoEFCC frameworks.",
+      "Strict Geographic Isolation: Every observation vector, coordinate query, and AI report is validated to ensure zero non-Indian data enters platform analytics."
     ]
   }
 };

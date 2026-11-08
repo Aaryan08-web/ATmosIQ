@@ -30,6 +30,7 @@ export const AtmosphericPage: React.FC = () => {
       .filter((p) => {
         const matchesSearch =
           p.name.toLowerCase().includes(search.toLowerCase()) ||
+          (p.state && p.state.toLowerCase().includes(search.toLowerCase())) ||
           p.country.toLowerCase().includes(search.toLowerCase());
         const matchesCategory =
           filterCategory === 'all' || p.category.toLowerCase().replace(/\s+/g, '-') === filterCategory;
@@ -51,7 +52,9 @@ export const AtmosphericPage: React.FC = () => {
       details: [
         `US AQI: ${p.usAqi ?? 'N/A'} (${p.category})`,
         `PM2.5: ${p.pm25 ?? 'N/A'} µg/m³ · PM10: ${p.pm10 ?? 'N/A'} µg/m³`,
-        'Model Source: Open-Meteo European CAMS',
+        ...(p.no2 != null ? [`NO₂: ${p.no2} µg/m³ · SO₂: ${p.so2 ?? '—'} µg/m³`] : []),
+        ...(p.co != null ? [`CO: ${p.co} µg/m³ · O₃: ${p.o3 ?? '—'} µg/m³`] : []),
+        'Model Source: Open-Meteo European CAMS Global Model',
       ],
     });
   };
@@ -182,9 +185,9 @@ export const AtmosphericPage: React.FC = () => {
         {/* Table Search & Controls */}
         <div className="p-5 border-b border-emerald-950/80 bg-[#0D1914] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <h3 className="text-[20px] sm:text-[22px] font-bold text-[#F2F5F2]">All Monitored Global Locations</h3>
+            <h3 className="text-[20px] sm:text-[22px] font-bold text-[#F2F5F2]">All Monitored Indian States, UTs &amp; Cities</h3>
             <span className="text-[13px] px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800/60 font-semibold">
-              {filteredPoints.length} cities
+              {filteredPoints.length} observatories
             </span>
           </div>
 
@@ -196,7 +199,7 @@ export const AtmosphericPage: React.FC = () => {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search city or country..."
+                placeholder="Search city, state or UT..."
                 className="pl-9 pr-3.5 py-2 rounded-lg bg-[#14251C] border border-emerald-900/60 text-[15px] text-[#F2F5F2] placeholder-[#9CAEA2] focus:outline-none focus:border-emerald-500 w-48 sm:w-60"
               />
             </div>
@@ -271,7 +274,7 @@ export const AtmosphericPage: React.FC = () => {
                   <tr key={`${p.name}-${p.country}`} className="hover:bg-[#14251C]/50 transition-colors">
                     <td className="py-3.5 px-5">
                       <div className="font-bold text-[#F2F5F2] text-[16px]">{p.name}</div>
-                      <div className="text-[13px] text-[#9CAEA2]">{p.country}</div>
+                      <div className="text-[13px] text-[#9CAEA2]">{p.state ? `${p.state}, India` : p.country}</div>
                     </td>
                     <td className="py-3.5 px-5 text-[14px] text-[#A8BCAE]">
                       {p.lat.toFixed(2)}°, {p.lon.toFixed(2)}°

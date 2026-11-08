@@ -54,7 +54,67 @@ CREATE TABLE IF NOT EXISTS environmental_alerts (
   acknowledged INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
+
+-- Global Forest Watch (GFW) Ingestion Tracking
+CREATE TABLE IF NOT EXISTS gfw_sync_status (
+  id TEXT PRIMARY KEY,
+  last_attempt_at TEXT NOT NULL,
+  last_success_at TEXT,
+  status TEXT NOT NULL,
+  records_ingested INTEGER NOT NULL DEFAULT 0,
+  error_message TEXT
+);
+
+-- Ingested Global Forest Watch live alerts with deduplication fingerprint
+CREATE TABLE IF NOT EXISTS gfw_forest_alerts (
+  id TEXT PRIMARY KEY,
+  alert_id TEXT UNIQUE NOT NULL,
+  dataset TEXT NOT NULL,
+  version TEXT NOT NULL,
+  latitude REAL NOT NULL,
+  longitude REAL NOT NULL,
+  area_ha REAL,
+  confidence TEXT NOT NULL,
+  alert_date TEXT NOT NULL,
+  location_name TEXT,
+  source TEXT NOT NULL,
+  retrieved_at TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+-- Indexes for rapid spatial and temporal querying
+CREATE INDEX IF NOT EXISTS idx_alerts_coords ON environmental_alerts (lat, lon);
+CREATE INDEX IF NOT EXISTS idx_alerts_created ON environmental_alerts (created_at);
+CREATE INDEX IF NOT EXISTS idx_gfw_coords ON gfw_forest_alerts (latitude, longitude);
+CREATE INDEX IF NOT EXISTS idx_gfw_date ON gfw_forest_alerts (alert_date);
+CREATE INDEX IF NOT EXISTS idx_snapshots_created ON environmental_snapshots (created_at);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
 `);
+
+export interface GfwSyncStatusRow {
+  id: string;
+  last_attempt_at: string;
+  last_success_at: string | null;
+  status: 'idle' | 'running' | 'success' | 'failed' | 'unauthorized' | 'unavailable';
+  records_ingested: number;
+  error_message: string | null;
+}
+
+export interface GfwForestAlertRow {
+  id: string;
+  alert_id: string;
+  dataset: string;
+  version: string;
+  latitude: number;
+  longitude: number;
+  area_ha: number | null;
+  confidence: 'high' | 'nominal' | 'low';
+  alert_date: string;
+  location_name: string | null;
+  source: string;
+  retrieved_at: string;
+  created_at: number;
+}
 
 export interface EnvironmentalAlertRow {
   id: string;

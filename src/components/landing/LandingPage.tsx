@@ -75,14 +75,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="max-w-6xl mx-auto">
           <div className="mb-14 text-left">
             <span className="text-sm sm:text-base font-mono text-emerald-400 uppercase tracking-widest font-bold">
-              MISSION CAPABILITIES
+              INDIA ENVIRONMENTAL INTELLIGENCE
             </span>
             <h2 className="text-3xl sm:text-5xl font-extrabold text-[#F2F5F2] mt-3 tracking-tight">
-              Autonomous Planetary Risk Intelligence
+              Sovereign Environmental Risk Intelligence
             </h2>
             <p className="text-lg sm:text-xl text-[#CBDAD0] mt-4 max-w-3xl leading-relaxed">
               High-cadence multi-sensor observation pipelines analyzing ecosystem vulnerability,
-              carbon displacement, and ecological threat dynamics.
+              agricultural fire power, and atmospheric pollution dynamics across all 28 Indian States and 8 Union Territories.
             </p>
           </div>
 
@@ -92,15 +92,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <div className="w-14 h-14 rounded-2xl bg-[#174C34]/40 text-emerald-400 flex items-center justify-center mb-6 border border-emerald-800/40">
                   <TreeDeciduous className="w-7 h-7" />
                 </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-[#F2F5F2]">Forest-Loss Hotspots</h3>
+                <h3 className="text-xl sm:text-2xl font-bold text-[#F2F5F2]">Indian Forest Surveillance</h3>
                 <p className="mt-4 text-base sm:text-lg text-[#CBDAD0] leading-relaxed">
-                  A curated map of the world's most pressured forest regions, with the main driver
-                  of loss (ranching, plantations, charcoal, fire) for each, based on Global Forest Watch reporting.
+                  Near-real-time canopy disturbance alerts and curated reference baselines for India's most critical
+                  biomes: Western Ghats, Sundarbans, Central Highlands, and Northeast India.
                 </p>
               </div>
               <div className="mt-8 pt-4 border-t border-emerald-950 flex items-center justify-between text-sm sm:text-base font-mono text-emerald-400 font-semibold">
-                <span>Reference dataset</span>
-                <span>Global Forest Watch</span>
+                <span>Indian AOI Passes</span>
+                <span>GFW Integrated Alerts</span>
               </div>
             </div>
 
@@ -109,14 +109,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <div className="w-14 h-14 rounded-2xl bg-[#174C34]/40 text-emerald-400 flex items-center justify-center mb-6 border border-emerald-800/40">
                   <Wind className="w-7 h-7" />
                 </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-[#F2F5F2]">Active Fire Detection</h3>
+                <h3 className="text-xl sm:text-2xl font-bold text-[#F2F5F2]">Active Satellite Fire Detection</h3>
                 <p className="mt-4 text-base sm:text-lg text-[#CBDAD0] leading-relaxed">
-                  Near-real-time satellite thermal detections show where fires are burning right now,
-                  ranked by fire radiative power, refreshed every 15 minutes.
+                  Near-real-time satellite thermal detections show where agricultural residue burning and forest fires
+                  are active across India right now, strictly bounded to Indian sovereign territory.
                 </p>
               </div>
               <div className="mt-8 pt-4 border-t border-emerald-950 flex items-center justify-between text-sm sm:text-base font-mono text-emerald-400 font-semibold">
-                <span>Last 24 hours</span>
+                <span>Republic of India</span>
                 <span>NASA FIRMS · VIIRS</span>
               </div>
             </div>
@@ -126,14 +126,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <div className="w-14 h-14 rounded-2xl bg-[#174C34]/40 text-emerald-400 flex items-center justify-center mb-6 border border-emerald-800/40">
                   <Droplets className="w-7 h-7" />
                 </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-[#F2F5F2]">Air Quality Monitoring</h3>
+                <h3 className="text-xl sm:text-2xl font-bold text-[#F2F5F2]">All-India Air Quality</h3>
                 <p className="mt-4 text-base sm:text-lg text-[#CBDAD0] leading-relaxed">
-                  Current US AQI and PM2.5 for 45 major cities, with health categories, so you can see
-                  where air is unsafe and how it relates to nearby fires.
+                  Current multi-pollutant telemetry (US AQI, PM2.5, PM10, NO2, SO2, CO, O3) across 58 Indian metropolitan
+                  observatories and arbitrary coordinates within India.
                 </p>
               </div>
               <div className="mt-8 pt-4 border-t border-emerald-950 flex items-center justify-between text-sm sm:text-base font-mono text-emerald-400 font-semibold">
-                <span>US AQI · PM2.5</span>
+                <span>28 States &amp; 8 UTs</span>
                 <span>Open-Meteo / CAMS</span>
               </div>
             </div>

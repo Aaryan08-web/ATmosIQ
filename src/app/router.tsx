@@ -16,6 +16,7 @@ const AiBriefPage = lazy(() => import('@/pages/dashboard/AiBriefPage'));
 const AlertsPage = lazy(() => import('@/pages/dashboard/AlertsPage'));
 const DataSourcesPage = lazy(() => import('@/pages/dashboard/DataSourcesPage'));
 const SettingsPage = lazy(() => import('@/pages/dashboard/SettingsPage'));
+const AdminPage = lazy(() => import('@/pages/dashboard/AdminPage'));
 
 function Root() {
   return (
@@ -53,6 +54,7 @@ export const router = createBrowserRouter([
               { path: 'alerts', element: <AlertsPage /> },
               { path: 'data-sources', element: <DataSourcesPage /> },
               { path: 'settings', element: <SettingsPage /> },
+              { path: 'admin', element: <AdminPage /> },
             ],
           },
           { path: '/map', element: <Navigate to="/dashboard/map" replace /> },

@@ -117,8 +117,9 @@ export const RiskMapPage: React.FC = () => {
           category: 'forest',
           color: '#a855f7',
           badge: `${p.severity} Loss`,
-          description: `Primary Driver: ${p.driver}. Biome: ${p.biome}.`,
+          description: `Primary Driver: ${p.driver}. Biome: ${p.biome}. Curated baseline reference catalog.`,
           measurements: [
+            { label: 'Type', value: 'Curated Reference Hotspot' },
             { label: 'Severity', value: p.severity },
             { label: 'Driver', value: p.driver },
             { label: 'Biome', value: p.biome },
@@ -126,6 +127,33 @@ export const RiskMapPage: React.FC = () => {
           ],
           source: 'Global Forest Watch (Curated Reference)',
           raw: p,
+        });
+      });
+    }
+
+    // 3b. Global Forest Watch Live Ingested Satellite Alerts
+    if (activeLayers.forest && forest.data?.liveAlerts) {
+      forest.data.liveAlerts.forEach((a) => {
+        const isHigh = a.confidence === 'high';
+        list.push({
+          id: `gfw-live-${a.alert_id}`,
+          lat: a.latitude,
+          lon: a.longitude,
+          title: `GFW Alert: ${a.location_name || 'Canopy Loss Cluster'}`,
+          category: isHigh ? 'critical' : 'forest',
+          color: isHigh ? '#d946ef' : '#c084fc',
+          badge: `${a.confidence} Deforestation Alert`,
+          description: `Satellite canopy disturbance detected on ${a.alert_date} (dataset: ${a.dataset}).`,
+          measurements: [
+            { label: 'Alert Type', value: 'Live Satellite Ingestion' },
+            { label: 'Detection Date', value: a.alert_date },
+            { label: 'Confidence', value: a.confidence },
+            { label: 'Area Disturbed', value: a.area_ha ? `${a.area_ha.toFixed(1)} ha` : 'Sensor Pixel' },
+            { label: 'Dataset', value: `${a.dataset} (${a.version})` },
+          ],
+          source: 'Global Forest Watch (Integrated NRT)',
+          updatedAt: a.retrieved_at ? new Date(a.retrieved_at).toLocaleTimeString() : 'Synchronized',
+          raw: a,
         });
       });
     }
@@ -147,7 +175,7 @@ export const RiskMapPage: React.FC = () => {
     }
 
     return list;
-  }, [activeLayers, air.data?.points, fires.data?.points, fires.data?.source, fires.data?.fetchedAt, forest.data?.points, selectedPlace]);
+  }, [activeLayers, air.data?.points, fires.data?.points, fires.data?.source, fires.data?.fetchedAt, forest.data?.points, forest.data?.liveAlerts, selectedPlace]);
 
   // Spatial Proximity Radius (labeled honestly as an analysis radius, not a predictive boundary)
   const mapCircles: MapCircle[] = React.useMemo(() => {
@@ -163,55 +191,106 @@ export const RiskMapPage: React.FC = () => {
     ];
   }, [activeLayers.riskZones, selectedPlace]);
 
-  // Reference Ecological Biome Boundaries (labeled clearly as reference geography)
+  // Reference Ecological Biome Boundaries & Risk Corridors (India-Only)
   const mapPolygons: MapPolygon[] = React.useMemo(() => {
     if (!activeLayers.riskZones) return [];
-    return [
+    const base: MapPolygon[] = [
       {
-        id: 'cerrado-reference-polygon',
-        name: 'Cerrado Reference Biome (GFW Ecological Buffer)',
+        id: 'western-ghats-reference-corridor',
+        name: 'Western Ghats UNESCO Biodiversity Corridor',
         coordinates: [
           [
-            [-50.5, -14.0],
-            [-46.0, -14.0],
-            [-46.0, -11.0],
-            [-50.5, -11.0],
-            [-50.5, -14.0],
+            [73.2, 18.5],
+            [74.5, 18.5],
+            [77.5, 8.5],
+            [76.8, 8.2],
+            [74.5, 14.5],
+            [73.2, 18.5],
+          ],
+        ],
+        color: '#10b981',
+        fillOpacity: 0.15,
+        strokeColor: '#34d399',
+        strokeWidth: 1.5,
+        popup: 'Western Ghats UNESCO Biodiversity Corridor (Ecological Buffer)',
+      },
+      {
+        id: 'sundarbans-reference-reserve',
+        name: 'Sundarbans Mangrove Biosphere Reserve',
+        coordinates: [
+          [
+            [88.3, 21.6],
+            [89.1, 21.6],
+            [89.1, 22.3],
+            [88.3, 22.3],
+            [88.3, 21.6],
+          ],
+        ],
+        color: '#06b6d4',
+        fillOpacity: 0.15,
+        strokeColor: '#22d3ee',
+        strokeWidth: 1.5,
+        popup: 'Sundarbans Mangrove Biosphere Reserve & Tidal Delta Buffer',
+      },
+      {
+        id: 'indo-gangetic-reference-corridor',
+        name: 'Indo-Gangetic Atmospheric Particulate Corridor',
+        coordinates: [
+          [
+            [74.5, 31.5],
+            [88.0, 26.0],
+            [88.0, 24.5],
+            [76.5, 28.0],
+            [74.5, 31.5],
           ],
         ],
         color: '#ef4444',
         fillOpacity: 0.12,
         strokeColor: '#f87171',
         strokeWidth: 1.5,
-        popup: 'Cerrado Reference Ecological Boundary (Global Forest Watch)',
+        popup: 'Indo-Gangetic Plain Air Quality Degradation Corridor',
       },
       {
-        id: 'gran-chaco-reference-polygon',
-        name: 'Gran Chaco Reference Biome (GFW Ecological Buffer)',
+        id: 'central-india-reference-belt',
+        name: 'Central Indian Forest & Tiger Corridor',
         coordinates: [
           [
-            [-63.5, -24.0],
-            [-59.5, -24.0],
-            [-59.5, -20.0],
-            [-63.5, -20.0],
-            [-63.5, -24.0],
+            [79.5, 21.5],
+            [83.0, 21.5],
+            [83.0, 23.5],
+            [79.5, 23.5],
+            [79.5, 21.5],
           ],
         ],
-        color: '#f97316',
-        fillOpacity: 0.1,
-        strokeColor: '#fb923c',
+        color: '#a855f7',
+        fillOpacity: 0.14,
+        strokeColor: '#c084fc',
         strokeWidth: 1.5,
-        popup: 'Gran Chaco Reference Ecological Boundary (Global Forest Watch)',
+        popup: 'Central Indian Satpura-Maikal Ecological Buffer',
       },
     ];
-  }, [activeLayers.riskZones]);
+
+    // Active GFW Indian Forest AOIs (Near-Real-Time Surveillance Bounds)
+    const aoiPolygons: MapPolygon[] = (forest.data?.monitoredAois ?? []).map((aoi) => ({
+      id: `aoi-${aoi.id}`,
+      name: `${aoi.name} (Active NRT Surveillance AOI)`,
+      coordinates: aoi.geometry.coordinates,
+      color: '#059669',
+      fillOpacity: 0.2,
+      strokeColor: '#34d399',
+      strokeWidth: 2,
+      popup: `${aoi.name} · ${aoi.state} (Active GFW NRT Surveillance AOI ~40x40km. Unmonitored outside bounds)`,
+    }));
+
+    return [...base, ...aoiPolygons];
+  }, [activeLayers.riskZones, forest.data?.monitoredAois]);
 
   const handleMarkerClick = (marker: MapMarker) => {
     let kind: SelectedPlace['kind'] = 'point';
     const idStr = String(marker.id);
     if (idStr.startsWith('aq-')) kind = 'air';
     else if (idStr.startsWith('fire-')) kind = 'fire';
-    else if (idStr.startsWith('forest-')) kind = 'forest';
+    else if (idStr.startsWith('forest-') || idStr.startsWith('gfw-live-')) kind = 'forest';
 
     setSelectedPlace({
       name: marker.title || 'Selected Coordinate Point',
@@ -248,38 +327,52 @@ export const RiskMapPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Quick jump locations */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        {/* Quick jump locations across Indian regions */}
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-[13px] text-[#9CAEA2] hidden md:inline font-medium">Quick Jump:</span>
           <button
             type="button"
-            onClick={() => handleJumpTo('Delhi NCR Observatory', 28.6139, 77.2090, 12)}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#14251C] hover:bg-[#174C34] text-[15px] font-medium text-emerald-300 border border-emerald-900/60 transition-colors cursor-pointer"
+            onClick={() => handleJumpTo('Delhi NCR Observatory', 28.6139, 77.2090, 11)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14251C] hover:bg-[#174C34] text-[14px] font-medium text-emerald-300 border border-emerald-900/60 transition-colors cursor-pointer"
           >
-            <Navigation className="w-4 h-4 text-emerald-400" />
+            <Navigation className="w-3.5 h-3.5 text-emerald-400" />
             <span>Delhi NCR</span>
           </button>
           <button
             type="button"
-            onClick={() => handleJumpTo('Sumatra Peatland Basin', 0.5333, 101.4500, 10)}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#14251C] hover:bg-[#174C34] text-[15px] font-medium text-[#A8BCAE] hover:text-[#F2F5F2] border border-emerald-900/60 transition-colors cursor-pointer"
+            onClick={() => handleJumpTo('Pune Observatory', 18.5204, 73.8567, 11)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14251C] hover:bg-[#174C34] text-[14px] font-medium text-[#A8BCAE] hover:text-[#F2F5F2] border border-emerald-900/60 transition-colors cursor-pointer"
           >
-            <span>Sumatra</span>
+            <span>Pune</span>
           </button>
           <button
             type="button"
-            onClick={() => handleJumpTo('Cerrado Biome', -12.1500, -45.0000, 9)}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#14251C] hover:bg-[#174C34] text-[15px] font-medium text-[#A8BCAE] hover:text-[#F2F5F2] border border-emerald-900/60 transition-colors cursor-pointer"
+            onClick={() => handleJumpTo('Mumbai & Coast', 19.0760, 72.8777, 11)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14251C] hover:bg-[#174C34] text-[14px] font-medium text-[#A8BCAE] hover:text-[#F2F5F2] border border-emerald-900/60 transition-colors cursor-pointer"
           >
-            <span>Cerrado</span>
+            <span>Mumbai</span>
           </button>
           <button
             type="button"
-            onClick={() => handleJumpTo('Global View', 20, 0, 2)}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#14251C] hover:bg-[#174C34] text-[15px] font-medium text-[#A8BCAE] hover:text-[#F2F5F2] border border-emerald-900/60 transition-colors cursor-pointer"
+            onClick={() => handleJumpTo('Bengaluru Tech & Forest Hub', 12.9716, 77.5946, 11)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14251C] hover:bg-[#174C34] text-[14px] font-medium text-[#A8BCAE] hover:text-[#F2F5F2] border border-emerald-900/60 transition-colors cursor-pointer"
           >
-            <Globe className="w-4 h-4 text-emerald-400" />
-            <span>Global</span>
+            <span>Bengaluru</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleJumpTo('Sundarbans Biosphere', 21.95, 88.85, 10)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14251C] hover:bg-[#174C34] text-[14px] font-medium text-[#A8BCAE] hover:text-[#F2F5F2] border border-emerald-900/60 transition-colors cursor-pointer"
+          >
+            <span>Sundarbans</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleJumpTo('India National Overview', 22.5, 82.0, 5)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14251C] hover:bg-[#174C34] text-[14px] font-medium text-emerald-300 border border-emerald-900/60 transition-colors cursor-pointer"
+          >
+            <Globe className="w-3.5 h-3.5 text-emerald-400" />
+            <span>India View</span>
           </button>
         </div>
       </div>
@@ -294,14 +387,15 @@ export const RiskMapPage: React.FC = () => {
               layers={activeLayers}
               onToggle={handleToggleLayer}
               counts={{
-                air: air.data?.points?.length || 45,
+                air: air.data?.points?.length || 58,
                 fires: fires.data?.points?.length || 0,
-                forest: forest.data?.points?.length || 0,
+                forest: (forest.data?.points?.length || 0) + (forest.data?.liveAlerts?.length || 0),
                 riskZones: mapPolygons.length,
               }}
               liveStatuses={{
                 fires: fires.data?.live,
                 air: !!air.data,
+                forest: !!(forest.data?.liveAlerts && forest.data.liveAlerts.length > 0) || forest.data?.syncStatus?.status === 'success',
               }}
             />
           </div>
@@ -309,8 +403,8 @@ export const RiskMapPage: React.FC = () => {
           {/* Large Interactive Leaflet Map */}
           <div className="relative w-full">
             <AdvancedMap
-              center={[28.6139, 77.2090]}
-              zoom={11}
+              center={[22.5, 82.0]} // Centered on India
+              zoom={5}
               markers={mapMarkers}
               polygons={mapPolygons}
               circles={mapCircles}

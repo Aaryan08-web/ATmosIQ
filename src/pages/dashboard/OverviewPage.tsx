@@ -27,37 +27,50 @@ export const OverviewPage: React.FC = () => {
       lat: 28.6139,
       lon: 77.2090,
       risk: 'Critical',
-      reason: 'Dense urban atmospheric particulate accumulation & post-monsoon thermal anomalies',
+      reason: 'Dense urban atmospheric particulate accumulation & Indo-Gangetic basin inversion',
       details: [
         'Open-Meteo CAMS live atmospheric telemetry active',
-        'Multi-pollutant dispersion tracking PM2.5 and PM10',
-        'Central Ridge ecological buffer bounded within 3.5 km',
+        'Multi-pollutant dispersion tracking PM2.5, PM10, NO2',
+        'Northern Gangetic basin atmospheric inversion monitoring',
       ],
     },
     {
-      name: 'Sumatra Peatland Forest Zone',
-      region: 'Riau Province, Indonesia',
-      lat: 0.5333,
-      lon: 101.4500,
+      name: 'Western Ghats · Nilgiri Biosphere Core',
+      region: 'Western Ghats, Kerala / Tamil Nadu / Karnataka',
+      lat: 11.4500,
+      lon: 76.6500,
       risk: 'High',
-      reason: 'Seasonal agricultural clearance thermal clusters & tropical peatland degradation',
+      reason: 'UNESCO World Heritage biodiversity hotspot & canopy fragmentation pressures',
       details: [
-        'NASA FIRMS satellite VIIRS 375m thermal pass monitoring',
-        'Tropical moist broadleaf forest biome conservation area',
-        'Transboundary haze dispersal tracking active',
+        'Global Forest Watch Indian AOI satellite surveillance active',
+        'Tropical wet evergreen and montane shola forest buffer',
+        'High endemism and climate vulnerability indicator zone',
       ],
     },
     {
-      name: 'Cerrado MATOPIBA Agricultural Frontier',
-      region: 'Bahia / Tocantins, Brazil',
-      lat: -12.1500,
-      lon: -45.0000,
+      name: 'Sundarbans Mangrove Delta Observatory',
+      region: 'Sundarbans Biosphere, West Bengal',
+      lat: 21.9500,
+      lon: 88.8500,
       risk: 'Critical',
-      reason: 'Rapid savanna biome fragmentation and accelerated soy/cattle conversion',
+      reason: 'Tidal delta salinity intrusion, mangrove loss & intense cyclonic storm surges',
       details: [
-        'Global Forest Watch curated reference loss front',
-        'Biodiversity corridor buffer under continuous satellite surveillance',
-        'High drought vulnerability index detected',
+        'Tidal mangrove ecosystem monitoring',
+        'Coastal halophytic forest buffer surveillance',
+        'Sea level rise and coastal erosion indicator',
+      ],
+    },
+    {
+      name: 'Pune & Western Ghats Rain Shadow Observatory',
+      region: 'Maharashtra, India',
+      lat: 18.5204,
+      lon: 73.8567,
+      risk: 'Elevated',
+      reason: 'Deccan plateau urban expansion & Western Ghats catchment buffer',
+      details: [
+        'Continuous CAMS multi-pollutant telemetry',
+        'Mutha river catchment & Sahyadri hill corridor',
+        'Urban-forest interface air mass trajectory tracking',
       ],
     },
   ];
@@ -111,21 +124,34 @@ export const OverviewPage: React.FC = () => {
       });
     }
 
-    // Critical forest loss hotspot
+    // Top live GFW deforestation alert (if ingested)
+    const topLiveGfw = forest.data?.liveAlerts?.[0];
+    if (topLiveGfw) {
+      list.push({
+        id: `gfw-${topLiveGfw.alert_id}`,
+        title: `GFW Alert: ${topLiveGfw.confidence} confidence canopy loss`,
+        location: `${topLiveGfw.latitude.toFixed(2)}°N, ${topLiveGfw.longitude.toFixed(2)}°E`,
+        severity: topLiveGfw.confidence === 'high' ? 'Critical' : 'High',
+        source: 'Global Forest Watch (Live NRT)',
+        time: topLiveGfw.alert_date,
+      });
+    }
+
+    // Critical forest loss hotspot (Curated Reference)
     const critForest = forest.data?.points.find((p) => p.severity === 'Critical');
-    if (critForest) {
+    if (critForest && list.length < 4) {
       list.push({
         id: 'forest-top',
-        title: `Forest loss front: ${critForest.driver}`,
+        title: `Reference loss front: ${critForest.driver}`,
         location: `${critForest.name}, ${critForest.country}`,
         severity: 'Critical',
-        source: 'Global Forest Watch',
+        source: 'Global Forest Watch (Reference)',
         time: 'Reference dataset',
       });
     }
 
     return list.slice(0, 4);
-  }, [air.data?.points, fires.data?.points, forest.data?.points]);
+  }, [air.data?.points, fires.data?.points, forest.data?.points, forest.data?.liveAlerts]);
 
   return (
     <div className="space-y-8">

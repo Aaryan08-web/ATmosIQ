@@ -31,8 +31,8 @@ export const app1ChartConfig = {
 export const app1Projects = [
   {
     id: "proj-1",
-    name: "Amazon Canopy Deforestation Surveillance",
-    description: "High-frequency Sentinel & Landsat delta tracking over Cerrado buffer.",
+    name: "Western Ghats Canopy Deforestation Surveillance",
+    description: "High-frequency Sentinel & Landsat delta tracking over Nilgiris buffer.",
     progress: 78,
     status: "In progress" as const,
     dueDate: "Nov 24",
@@ -51,8 +51,8 @@ export const app1Projects = [
   },
   {
     id: "proj-2",
-    name: "Boreal Thermal Anomaly Calibration",
-    description: "NASA VIIRS FRP validation vs ground-truth station observations.",
+    name: "Indo-Gangetic Thermal Anomaly Calibration",
+    description: "NASA VIIRS FRP validation over Punjab & Haryana agricultural zones.",
     progress: 92,
     status: "In review" as const,
     dueDate: "Nov 18",

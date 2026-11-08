@@ -31,12 +31,12 @@ export const DashboardWelcome: React.FC<WelcomeProps> = ({
         </div>
 
         <h2 className="text-2xl sm:text-[32px] lg:text-[34px] font-bold text-[#F2F5F2] tracking-tight leading-tight">
-          Environmental Intelligence Overview
+          India Environmental Intelligence Overview
         </h2>
 
         <p className="text-[16px] sm:text-[17px] text-[#9CAEA2] max-w-3xl leading-relaxed">
-          Monitor environmental conditions, identify vulnerable regions, and understand emerging
-          environmental threats through geospatial intelligence.
+          Monitor environmental conditions, identify vulnerable biomes, and track atmospheric pollution
+          and thermal fire anomalies across all 28 Indian States and 8 Union Territories.
         </p>
       </div>
 
@@ -46,7 +46,7 @@ export const DashboardWelcome: React.FC<WelcomeProps> = ({
           <Satellite className="w-4 h-4 text-emerald-400" />
           <span>FIRMS:</span>
           <span className={firesLive ? 'text-emerald-300 font-semibold' : 'text-amber-300'}>
-            {firesLive ? 'Live VIIRS' : 'Sample Telemetry'}
+            {firesLive ? 'Live VIIRS (India)' : 'Demonstration Data'}
           </span>
         </div>
 
@@ -54,7 +54,7 @@ export const DashboardWelcome: React.FC<WelcomeProps> = ({
           <Radio className="w-4 h-4 text-emerald-400" />
           <span>CAMS:</span>
           <span className={aqAvailable ? 'text-emerald-300 font-semibold' : 'text-red-400'}>
-            {aqAvailable ? '45 Cities Online' : 'Unavailable'}
+            {aqAvailable ? '58 Indian Observatories' : 'Unavailable'}
           </span>
         </div>
 

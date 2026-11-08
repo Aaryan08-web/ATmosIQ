@@ -24,5 +24,6 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "exclude": ["dist", "server"]
+  "include": ["src"],
+  "exclude": ["dist", "server", "ai-powered-environmental-risk-pollution-impact-intelligence"]
 }
