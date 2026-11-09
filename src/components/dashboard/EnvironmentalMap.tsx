@@ -364,7 +364,7 @@ export const EnvironmentalMap: React.FC<EnvironmentalMapProps> = ({
         </div>
 
         {/* The Advanced Map Instance */}
-        <div className="relative">
+        <div className="relative h-[380px] sm:h-[460px] lg:h-[560px] w-full min-w-0 rounded-xl overflow-hidden">
           <AdvancedMap
             center={[22.5, 82.0]} // Center of the Republic of India
             zoom={5}
@@ -378,9 +378,8 @@ export const EnvironmentalMap: React.FC<EnvironmentalMapProps> = ({
             enableControls={true}
             flyToLocation={flyToCoords}
             style={{
-              height: '560px',
+              height: '100%',
               width: '100%',
-              minHeight: '380px',
             }}
           />
         </div>
@@ -390,17 +389,17 @@ export const EnvironmentalMap: React.FC<EnvironmentalMapProps> = ({
       </div>
 
       {/* Selected Location Details Panel & AI Brief */}
-      <div className="rounded-xl bg-[#14251C] border border-emerald-950 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-emerald-950/80 flex items-center justify-between">
+      <div className="rounded-xl bg-[#14251C] border border-emerald-950/80 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-emerald-950/80 bg-[#0D1914] flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-blue-400" />
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <h4 className="text-xs font-bold font-mono uppercase tracking-wider text-[#F2F5F2]">
-              Selected Location Analysis &amp; Briefing
+              Target Location Intelligence &amp; AI Briefing
             </h4>
           </div>
-          <span className="text-[10px] font-mono text-[#9CAEA2]">150 km radius</span>
+          <span className="text-[11px] font-mono text-[#9CAEA2]">Synchronous Buffer</span>
         </div>
-        <PlacePanel place={activeSelected} />
+        <PlacePanel place={activeSelected} fires={fires} forest={forest} />
       </div>
     </div>
   );

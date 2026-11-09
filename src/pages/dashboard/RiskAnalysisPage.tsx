@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useDashboardContext } from '@/components/dashboard/DashboardLayout';
-import { ShieldAlert, MapPin, Wind, Flame, TreeDeciduous, Info, Crosshair, ArrowRight, Activity, AlertCircle, RefreshCw } from 'lucide-react';
+import { Wind, Flame, TreeDeciduous, Crosshair, AlertCircle } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import type { SelectedPlace, AqPointResult } from '@/types';
 
@@ -211,26 +211,27 @@ export const RiskAnalysisPage: React.FC = () => {
   const pt = pointAq?.point;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8 min-w-0">
       {/* 1. Target Location Selection Bar */}
-      <div className="p-5 rounded-xl bg-[#101F18] border border-emerald-950 shadow-sm space-y-4">
+      <div className="p-4 sm:p-5 rounded-xl bg-[#101F18] border border-emerald-950/80 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-emerald-950/80">
           <div>
             <div className="flex items-center gap-2">
-              <Crosshair className="w-5 h-5 text-emerald-400" />
-              <h3 className="text-base font-bold text-[#F2F5F2]">Spatial Location &amp; Vector Controls</h3>
+              <Crosshair className="w-5 h-5 text-emerald-400 shrink-0" />
+              <h3 className="text-base font-serif font-bold text-[#F2F5F2]">Spatial Location &amp; Vector Controls</h3>
             </div>
-            <p className="text-xs text-[#9CAEA2] mt-0.5">
-              Input precise geographic coordinates to retrieve synchronous multi-pollutant telemetry and nearby satellite anomalies.
+            <p className="text-sm sm:text-[15px] text-[#CBDAD0] mt-1 leading-relaxed">
+              Input precise geographic coordinates to retrieve synchronous multi-pollutant telemetry and nearby satellite anomalies across India.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-[#9CAEA2]">Radius Buffer:</span>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <span className="text-xs sm:text-sm font-mono text-[#9CAEA2] whitespace-nowrap">Radius Buffer:</span>
             <select
               value={analysisRadiusKm}
               onChange={(e) => setAnalysisRadiusKm(Number(e.target.value))}
-              className="px-3 py-1.5 rounded-lg bg-[#14251C] border border-emerald-900/60 text-xs text-[#F2F5F2] font-mono cursor-pointer"
+              aria-label="Analysis Radius Buffer"
+              className="px-3 py-1.5 rounded-lg bg-[#14251C] border border-emerald-900/60 text-xs sm:text-sm text-[#F2F5F2] font-mono cursor-pointer"
             >
               <option value={100}>100 km</option>
               <option value={200}>200 km</option>
@@ -241,41 +242,41 @@ export const RiskAnalysisPage: React.FC = () => {
         </div>
 
         {/* Input Coordinates Form */}
-        <form onSubmit={handleApplyCoordinates} className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <form onSubmit={handleApplyCoordinates} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
-            <label className="text-[11px] font-mono text-[#9CAEA2] block mb-1">Target Name</label>
+            <label className="text-xs sm:text-sm font-medium text-[#A8BCAE] block mb-1">Target Name</label>
             <input
               type="text"
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}
               placeholder="Observation point..."
-              className="w-full px-3 py-1.5 rounded-lg bg-[#0D1914] border border-emerald-900/60 text-xs text-[#F2F5F2] focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 rounded-lg bg-[#0D1914] border border-emerald-900/60 text-xs sm:text-sm text-[#F2F5F2] focus:outline-none focus:border-emerald-500"
             />
           </div>
           <div>
-            <label className="text-[14px] text-[#A8BCAE] block mb-1 font-medium">Latitude (°N/S)</label>
+            <label className="text-xs sm:text-sm text-[#A8BCAE] block mb-1 font-medium">Latitude (°N)</label>
             <input
               type="number"
               step="any"
               value={customLat}
               onChange={(e) => setCustomLat(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-lg bg-[#0D1914] border border-emerald-900/60 text-[15px] text-[#F2F5F2] focus:outline-none focus:border-emerald-500 font-mono"
+              className="w-full px-3 py-2 rounded-lg bg-[#0D1914] border border-emerald-900/60 text-xs sm:text-sm text-[#F2F5F2] focus:outline-none focus:border-emerald-500 font-mono"
             />
           </div>
           <div>
-            <label className="text-[14px] text-[#A8BCAE] block mb-1 font-medium">Longitude (°E/W)</label>
+            <label className="text-xs sm:text-sm text-[#A8BCAE] block mb-1 font-medium">Longitude (°E)</label>
             <input
               type="number"
               step="any"
               value={customLon}
               onChange={(e) => setCustomLon(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-lg bg-[#0D1914] border border-emerald-900/60 text-[15px] text-[#F2F5F2] focus:outline-none focus:border-emerald-500 font-mono"
+              className="w-full px-3 py-2 rounded-lg bg-[#0D1914] border border-emerald-900/60 text-xs sm:text-sm text-[#F2F5F2] focus:outline-none focus:border-emerald-500 font-mono"
             />
           </div>
           <div className="flex items-end">
             <button
               type="submit"
-              className="w-full py-2.5 px-4 rounded-lg bg-[#174C34] hover:bg-[#1F6244] border border-emerald-600/70 text-[16px] font-bold text-[#F2F5F2] transition-colors cursor-pointer"
+              className="w-full py-2 px-4 rounded-lg bg-[#174C34] hover:bg-[#1F6244] border border-emerald-600/70 text-xs sm:text-sm font-semibold text-[#F2F5F2] transition-colors cursor-pointer"
             >
               Analyze Coordinates
             </button>
@@ -283,8 +284,8 @@ export const RiskAnalysisPage: React.FC = () => {
         </form>
 
         {/* Indian Location Presets */}
-        <div className="pt-2 border-t border-emerald-950/60 flex flex-wrap items-center gap-2">
-          <span className="text-[12px] font-mono text-[#9CAEA2] uppercase tracking-wider">Indian Presets:</span>
+        <div className="pt-2 border-t border-emerald-950/60 flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <span className="text-xs sm:text-sm font-mono text-[#9CAEA2] uppercase tracking-wider mr-1">Indian Presets:</span>
           {[
             { name: 'Delhi NCR', lat: 28.6139, lon: 77.2090 },
             { name: 'Pune', lat: 18.5204, lon: 73.8567 },
@@ -299,7 +300,7 @@ export const RiskAnalysisPage: React.FC = () => {
               key={preset.name}
               type="button"
               onClick={() => setIndianPreset(preset.name, preset.lat, preset.lon)}
-              className="px-2.5 py-1 rounded bg-[#0D1914] hover:bg-[#174C34] text-[12px] font-mono text-[#CBDAD0] hover:text-[#F2F5F2] border border-emerald-900/50 transition-colors"
+              className="px-2.5 py-1 rounded bg-[#0D1914] hover:bg-[#174C34] text-xs sm:text-[13px] font-mono text-[#CBDAD0] hover:text-[#F2F5F2] border border-emerald-900/50 transition-colors cursor-pointer"
             >
               {preset.name}
             </button>
@@ -308,16 +309,16 @@ export const RiskAnalysisPage: React.FC = () => {
       </div>
 
       {/* 2. Transparent Multi-Vector Risk Score Box */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-w-0">
         {/* Left: Score Card */}
-        <div className="lg:col-span-5 rounded-xl bg-[#101F18] border border-emerald-950 p-6 shadow-sm space-y-5 flex flex-col justify-between">
-          <div className="space-y-2.5">
+        <div className="lg:col-span-5 rounded-xl bg-[#101F18] border border-emerald-950/80 p-5 sm:p-6 shadow-sm space-y-5 flex flex-col justify-between">
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-[13px] font-bold uppercase tracking-wider text-[#9CAEA2]">
+              <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-[#A8BCAE]">
                 EVIDENCE-BASED RISK INDEX
               </span>
               <span
-                className={`px-3 py-1 rounded text-[12px] font-semibold uppercase border ${
+                className={`px-3 py-1 rounded text-xs font-semibold uppercase border ${
                   riskCalculation.level === 'Critical'
                     ? 'bg-red-950 text-red-300 border-red-800'
                     : riskCalculation.level === 'High'
@@ -329,24 +330,24 @@ export const RiskAnalysisPage: React.FC = () => {
               </span>
             </div>
 
-            <div className="flex items-baseline gap-2 pt-2">
-              <span className="text-[52px] sm:text-[58px] font-bold text-[#F2F5F2] leading-none">
+            <div className="flex items-baseline gap-2 pt-1">
+              <span className="text-5xl sm:text-6xl font-bold font-mono text-[#F2F5F2] leading-none">
                 {riskCalculation.totalScore}
               </span>
-              <span className="text-[22px] text-[#9CAEA2]">/ 100</span>
+              <span className="text-xl sm:text-2xl text-[#9CAEA2] font-mono">/ 100</span>
             </div>
 
-            <p className="text-[15px] sm:text-[16px] text-[#CBDAD0] leading-relaxed pt-1">
-              Composite experimental vulnerability evaluation calculated directly from synchronous Open-Meteo CAMS atmospheric simulation at ({currentLat.toFixed(2)}°, {currentLon.toFixed(2)}°), surrounding thermal fire clusters, and Global Forest Watch canopy loss vectors.
+            <p className="text-sm sm:text-[15px] text-[#CBDAD0] leading-relaxed pt-1">
+              Composite environmental vulnerability score synthesized from Open-Meteo CAMS atmospheric telemetry at ({currentLat.toFixed(2)}°, {currentLon.toFixed(2)}°), surrounding thermal fire clusters, and Global Forest Watch canopy disturbance vectors.
             </p>
           </div>
 
           {/* Breakdown bars */}
-          <div className="space-y-3.5 pt-4 border-t border-emerald-950/80">
+          <div className="space-y-3 pt-4 border-t border-emerald-950/80">
             <div className="space-y-1.5">
-              <div className="flex justify-between text-[14px]">
-                <span className="text-[#A8BCAE]">Atmospheric Particulate Weight ({pt?.usAqi != null ? `${pt.usAqi} AQI` : 'Model'})</span>
-                <span className="font-semibold text-[#F2F5F2]">{riskCalculation.breakdown.airScore} / 40</span>
+              <div className="flex justify-between text-sm sm:text-[15px]">
+                <span className="text-[#A8BCAE]">Atmospheric Particulate ({pt?.usAqi != null ? `${pt.usAqi} AQI` : 'Model'})</span>
+                <span className="font-semibold font-mono text-[#F2F5F2]">{riskCalculation.breakdown.airScore} / 40</span>
               </div>
               <div className="h-2 rounded-full bg-emerald-950 overflow-hidden">
                 <div
@@ -357,9 +358,9 @@ export const RiskAnalysisPage: React.FC = () => {
             </div>
 
             <div className="space-y-1.5">
-              <div className="flex justify-between text-[14px]">
+              <div className="flex justify-between text-sm sm:text-[15px]">
                 <span className="text-[#A8BCAE]">Thermal Radiative Clusters ({nearbyFires.length} in buffer)</span>
-                <span className="font-semibold text-[#F2F5F2]">{riskCalculation.breakdown.fireScore} / 35</span>
+                <span className="font-semibold font-mono text-[#F2F5F2]">{riskCalculation.breakdown.fireScore} / 35</span>
               </div>
               <div className="h-2 rounded-full bg-emerald-950 overflow-hidden">
                 <div
@@ -370,11 +371,11 @@ export const RiskAnalysisPage: React.FC = () => {
             </div>
 
             <div className="space-y-1.5">
-              <div className="flex justify-between text-[14px]">
+              <div className="flex justify-between text-sm sm:text-[15px]">
                 <span className="text-[#A8BCAE]">
-                  Canopy Disturbance ({nearbyLiveGfwAlerts.length > 0 ? `${nearbyLiveGfwAlerts.length} live alerts` : 'Reference biome buffer'})
+                  Canopy Disturbance ({nearbyLiveGfwAlerts.length > 0 ? `${nearbyLiveGfwAlerts.length} live alerts` : 'Reference biomes'})
                 </span>
-                <span className="font-semibold text-[#F2F5F2]">{riskCalculation.breakdown.forestScore} / 15</span>
+                <span className="font-semibold font-mono text-[#F2F5F2]">{riskCalculation.breakdown.forestScore} / 15</span>
               </div>
               <div className="h-2 rounded-full bg-emerald-950 overflow-hidden">
                 <div
@@ -387,15 +388,15 @@ export const RiskAnalysisPage: React.FC = () => {
         </div>
 
         {/* Right: Individual Contributing Measurements */}
-        <div className="lg:col-span-7 space-y-4">
+        <div className="lg:col-span-7 space-y-4 min-w-0">
           {/* Exact Coordinate Air Observation Node */}
-          <div className="p-5 rounded-xl bg-[#101F18] border border-emerald-950 shadow-sm space-y-3">
-            <div className="flex items-center justify-between pb-2.5 border-b border-emerald-950/80">
+          <div className="p-4 sm:p-5 rounded-xl bg-[#101F18] border border-emerald-950/80 shadow-sm space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-2.5 border-b border-emerald-950/80">
               <div className="flex items-center gap-2">
-                <Wind className="w-5 h-5 text-cyan-400" />
-                <h4 className="text-[18px] sm:text-[19px] font-bold text-[#F2F5F2]">Coordinate Atmospheric Telemetry</h4>
+                <Wind className="w-5 h-5 text-cyan-400 shrink-0" />
+                <h4 className="text-base sm:text-lg font-serif font-bold text-[#F2F5F2]">Coordinate Atmospheric Telemetry</h4>
               </div>
-              <span className="text-[13px] text-cyan-300 font-semibold font-mono">
+              <span className="text-xs sm:text-sm text-cyan-300 font-semibold font-mono">
                 {currentLat.toFixed(3)}°N, {currentLon.toFixed(3)}°E
               </span>
             </div>
@@ -410,26 +411,26 @@ export const RiskAnalysisPage: React.FC = () => {
                 </div>
               </div>
             ) : aqError ? (
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-950/30 border border-red-900/50 text-xs text-red-300">
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-950/30 border border-red-900/50 text-xs sm:text-sm text-red-300">
                 <AlertCircle className="w-4 h-4 shrink-0 text-red-400 mt-0.5" />
                 <div className="space-y-1">
                   <span className="font-semibold">{aqError}</span>
-                  <p className="text-[11px] text-[#9CAEA2]">
-                    Data Integrity Guarantee: ATmosIQ does not substitute unrelated city records when coordinate observations are unavailable.
+                  <p className="text-xs text-[#9CAEA2]">
+                    Data Integrity: Observations are retrieved directly for the selected coordinate pair.
                   </p>
                 </div>
               </div>
             ) : pt ? (
               <div className="space-y-3">
                 {/* Primary AQI Banner */}
-                <div className="flex items-center justify-between p-3 rounded-lg bg-[#0D1914] border border-emerald-950">
+                <div className="flex items-center justify-between p-3.5 rounded-lg bg-[#0D1914] border border-emerald-950">
                   <div>
-                    <span className="text-[11px] text-[#9CAEA2] uppercase font-semibold block">US Air Quality Index</span>
-                    <span className="text-3xl font-bold font-mono text-[#F2F5F2] leading-tight">
+                    <span className="text-xs sm:text-[13px] text-[#A8BCAE] uppercase font-semibold block">US Air Quality Index</span>
+                    <span className="text-3xl sm:text-4xl font-bold font-mono text-[#F2F5F2] leading-tight">
                       {pt.usAqi != null ? pt.usAqi : '—'}
                     </span>
                   </div>
-                  <span className={`px-3 py-1 rounded text-xs font-semibold uppercase border ${getAqiBadgeColor(pt.usAqi)}`}>
+                  <span className={`px-3 py-1 rounded text-xs sm:text-[13px] font-semibold uppercase border ${getAqiBadgeColor(pt.usAqi)}`}>
                     {pt.category}
                   </span>
                 </div>
@@ -437,142 +438,137 @@ export const RiskAnalysisPage: React.FC = () => {
                 {/* 6-Pollutant Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                   <div className="p-2.5 rounded bg-[#0D1914] border border-emerald-950/80">
-                    <span className="text-[11px] text-[#9CAEA2] block">PM2.5</span>
-                    <span className="font-mono font-bold text-[#F2F5F2] text-[14px]">
+                    <span className="text-xs sm:text-[13px] text-[#A8BCAE] block">PM2.5</span>
+                    <span className="font-mono font-bold text-[#F2F5F2] text-sm sm:text-[15px] mt-0.5 block">
                       {pt.pm25 != null ? `${pt.pm25} µg/m³` : '—'}
                     </span>
                   </div>
 
                   <div className="p-2.5 rounded bg-[#0D1914] border border-emerald-950/80">
-                    <span className="text-[11px] text-[#9CAEA2] block">PM10</span>
-                    <span className="font-mono font-bold text-[#F2F5F2] text-[14px]">
+                    <span className="text-xs sm:text-[13px] text-[#A8BCAE] block">PM10</span>
+                    <span className="font-mono font-bold text-[#F2F5F2] text-sm sm:text-[15px] mt-0.5 block">
                       {pt.pm10 != null ? `${pt.pm10} µg/m³` : '—'}
                     </span>
                   </div>
 
                   <div className="p-2.5 rounded bg-[#0D1914] border border-emerald-950/80">
-                    <span className="text-[11px] text-[#9CAEA2] block">NO₂</span>
-                    <span className="font-mono font-bold text-[#F2F5F2] text-[14px]">
+                    <span className="text-xs sm:text-[13px] text-[#A8BCAE] block">NO₂</span>
+                    <span className="font-mono font-bold text-[#F2F5F2] text-sm sm:text-[15px] mt-0.5 block">
                       {pt.no2 != null ? `${pt.no2} µg/m³` : '—'}
                     </span>
                   </div>
 
                   <div className="p-2.5 rounded bg-[#0D1914] border border-emerald-950/80">
-                    <span className="text-[11px] text-[#9CAEA2] block">SO₂</span>
-                    <span className="font-mono font-bold text-[#F2F5F2] text-[14px]">
+                    <span className="text-xs sm:text-[13px] text-[#A8BCAE] block">SO₂</span>
+                    <span className="font-mono font-bold text-[#F2F5F2] text-sm sm:text-[15px] mt-0.5 block">
                       {pt.so2 != null ? `${pt.so2} µg/m³` : '—'}
                     </span>
                   </div>
 
                   <div className="p-2.5 rounded bg-[#0D1914] border border-emerald-950/80">
-                    <span className="text-[11px] text-[#9CAEA2] block">CO</span>
-                    <span className="font-mono font-bold text-[#F2F5F2] text-[14px]">
+                    <span className="text-xs sm:text-[13px] text-[#A8BCAE] block">CO</span>
+                    <span className="font-mono font-bold text-[#F2F5F2] text-sm sm:text-[15px] mt-0.5 block">
                       {pt.co != null ? `${pt.co} µg/m³` : '—'}
                     </span>
                   </div>
 
                   <div className="p-2.5 rounded bg-[#0D1914] border border-emerald-950/80">
-                    <span className="text-[11px] text-[#9CAEA2] block">O₃</span>
-                    <span className="font-mono font-bold text-[#F2F5F2] text-[14px]">
+                    <span className="text-xs sm:text-[13px] text-[#A8BCAE] block">O₃</span>
+                    <span className="font-mono font-bold text-[#F2F5F2] text-sm sm:text-[15px] mt-0.5 block">
                       {pt.o3 != null ? `${pt.o3} µg/m³` : '—'}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 text-[11px] text-[#9CAEA2] border-t border-emerald-950/50">
-                  <span>Source: <strong className="text-emerald-400">Open-Meteo European CAMS Global Model</strong></span>
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 text-xs text-[#9CAEA2] border-t border-emerald-950/50">
+                  <span>Source: <strong className="text-emerald-400">Open-Meteo CAMS Global Model</strong></span>
                   <span>Observation Cycle: {pt.time ? new Date(pt.time).toUTCString() : 'Hourly cycle'}</span>
                 </div>
               </div>
             ) : (
-              <p className="text-[14px] text-[#9CAEA2]">No atmospheric observation point in range.</p>
+              <p className="text-sm text-[#9CAEA2]">No atmospheric observation point in range.</p>
             )}
           </div>
 
           {/* Thermal Fire Proximity */}
-          <div className="p-5 rounded-xl bg-[#101F18] border border-emerald-950 shadow-sm space-y-3">
+          <div className="p-4 sm:p-5 rounded-xl bg-[#101F18] border border-emerald-950/80 shadow-sm space-y-3">
             <div className="flex items-center justify-between pb-2.5 border-b border-emerald-950/80">
               <div className="flex items-center gap-2">
-                <Flame className="w-5 h-5 text-orange-400" />
-                <h4 className="text-[18px] sm:text-[19px] font-bold text-[#F2F5F2]">Thermal Anomalies in {analysisRadiusKm} km Buffer</h4>
+                <Flame className="w-5 h-5 text-orange-400 shrink-0" />
+                <h4 className="text-base sm:text-lg font-serif font-bold text-[#F2F5F2]">Thermal Anomalies in {analysisRadiusKm} km Buffer</h4>
               </div>
-              <span className="text-[14px] text-orange-400 font-bold">
-                {nearbyFires.length} fire detections
+              <span className="text-sm sm:text-[15px] text-orange-400 font-bold font-mono">
+                {nearbyFires.length} detections
               </span>
             </div>
 
             {nearbyFires.length > 0 ? (
-              <div className="space-y-2.5 pt-1">
+              <div className="space-y-2 pt-1">
                 {nearbyFires.slice(0, 3).map((f, i) => (
-                  <div key={i} className="flex items-center justify-between text-[14px] p-2.5 rounded bg-[#0D1914]">
-                    <span className="text-[#F2F5F2] font-medium">
-                      Pass at {f.lat.toFixed(2)}°N, {f.lon.toFixed(2)}°E ({f.satellite})
-                    </span>
-                    <span className="text-orange-400 font-bold">{Math.round(f.frp)} MW</span>
-                    <span className="text-[#9CAEA2]">{f.distanceKm} km away</span>
+                  <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 p-2.5 rounded bg-[#0D1914] text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[#F2F5F2] font-medium text-sm sm:text-[15px]">
+                        Pass at {f.lat.toFixed(2)}°N, {f.lon.toFixed(2)}°E ({f.satellite})
+                      </span>
+                      <span className="text-orange-400 font-bold font-mono text-sm sm:text-[15px]">{Math.round(f.frp)} MW</span>
+                    </div>
+                    <span className="text-[#CBDAD0] font-mono text-xs sm:text-sm">{f.distanceKm} km away</span>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-[#9CAEA2] py-2">
+              <p className="text-xs sm:text-sm text-[#9CAEA2] py-2">
                 Zero active VIIRS thermal anomalies detected within {analysisRadiusKm} km in the past 24 hours.
               </p>
             )}
           </div>
 
           {/* Forest Loss: Live Alerts & Curated Reference Hotspots */}
-          <div className="p-4 rounded-xl bg-[#101F18] border border-emerald-950 shadow-sm space-y-3">
+          <div className="p-4 sm:p-5 rounded-xl bg-[#101F18] border border-emerald-950/80 shadow-sm space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-emerald-950/80">
               <div className="flex items-center gap-2">
-                <TreeDeciduous className="w-4 h-4 text-purple-400" />
-                <h4 className="text-sm font-bold text-[#F2F5F2]">Global Forest Watch Ingestion &amp; Reference</h4>
+                <TreeDeciduous className="w-5 h-5 text-purple-400 shrink-0" />
+                <h4 className="text-base sm:text-lg font-serif font-bold text-[#F2F5F2]">Global Forest Watch Ingestion</h4>
               </div>
-              <span className="text-xs font-mono text-purple-300">
+              <span className="text-xs sm:text-sm font-mono text-purple-300">
                 {nearbyLiveGfwAlerts.length > 0 ? `${nearbyLiveGfwAlerts.length} Live Alerts` : 'Reference Biomes'}
               </span>
             </div>
 
             {nearbyLiveGfwAlerts.length > 0 ? (
               <div className="space-y-2 pt-1">
-                <span className="text-[11px] font-mono text-purple-300 uppercase block font-semibold">
+                <span className="text-xs sm:text-sm font-mono text-purple-300 uppercase block font-semibold">
                   Live Satellite Canopy Disturbance Alerts:
                 </span>
                 {nearbyLiveGfwAlerts.slice(0, 3).map((a) => (
-                  <div key={a.id} className="flex items-center justify-between text-xs p-2 rounded bg-[#0D1914] font-mono">
-                    <span className="text-[#F2F5F2] font-sans font-medium">
+                  <div key={a.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs sm:text-sm p-2.5 rounded bg-[#0D1914]">
+                    <span className="text-[#F2F5F2] font-medium text-sm sm:text-[15px]">
                       Alert at {a.latitude.toFixed(2)}°N, {a.longitude.toFixed(2)}°E ({a.alert_date})
                     </span>
-                    <span className="text-purple-300 capitalize">{a.confidence} Confidence</span>
-                    <span className="text-[#9CAEA2]">{a.distanceKm} km away</span>
+                    <div className="flex items-center gap-2 font-mono text-xs sm:text-sm">
+                      <span className="text-purple-300 capitalize">{a.confidence} Confidence</span>
+                      <span className="text-[#CBDAD0]">• {a.distanceKm} km away</span>
+                    </div>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="space-y-2 pt-1">
-                <span className="text-[11px] font-mono text-[#9CAEA2] uppercase block">
+                <span className="text-xs sm:text-sm font-mono text-[#9CAEA2] uppercase block">
                   Closest Curated Reference Loss Hotspots (GFW Baseline):
                 </span>
                 {nearbyForestHotspots.map((f) => (
-                  <div key={f.id} className="flex items-center justify-between text-xs p-2 rounded bg-[#0D1914] font-mono">
-                    <span className="text-[#F2F5F2] font-sans font-medium">{f.name} ({f.country})</span>
-                    <span className="text-purple-300">{f.severity} Loss</span>
-                    <span className="text-[#9CAEA2]">{f.distanceKm} km away</span>
+                  <div key={f.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs sm:text-sm p-2.5 rounded bg-[#0D1914]">
+                    <span className="text-[#F2F5F2] font-medium text-sm sm:text-[15px]">{f.name} ({f.country})</span>
+                    <div className="flex items-center gap-2 font-mono text-xs sm:text-sm">
+                      <span className="text-purple-300">{f.severity} Loss</span>
+                      <span className="text-[#CBDAD0]">• {f.distanceKm} km away</span>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Limitations & Methodology Disclaimer */}
-      <div className="flex items-start gap-3 p-4 rounded-xl bg-[#0D1914] border border-emerald-950/80 text-xs text-[#9CAEA2] leading-relaxed">
-        <Info className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-        <div className="space-y-1">
-          <p className="font-semibold text-[#F2F5F2]">Scientific Methodology &amp; Mathematical Constraints:</p>
-          <p>
-            Distances are computed using the spherical Haversine formula over WGS84 geodesics. The Environmental Risk Index is an experimental composite proxy derived from active sensor inputs without claiming regulatory legal authority. Satellite passes are periodic (12–24h intervals) and cloud cover can obscure optical thermal sensors. Coordinate atmospheric values are computed from the Open-Meteo European CAMS multi-pollutant reanalysis grid.
-          </p>
         </div>
       </div>
     </div>

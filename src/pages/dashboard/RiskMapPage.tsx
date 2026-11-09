@@ -4,7 +4,7 @@ import { AdvancedMap, type MapMarker, type MapCircle, type MapPolygon } from '@/
 import { MapLayerControls, type LayerKey } from '@/components/dashboard/MapLayerControls';
 import { MapLegend } from '@/components/dashboard/MapLegend';
 import { PlacePanel } from '@/features/dashboard/PlacePanel';
-import { Navigation, Globe, Shield, Info } from 'lucide-react';
+import { Navigation, Globe, Shield } from 'lucide-react';
 import type { SelectedPlace } from '@/types';
 
 export const RiskMapPage: React.FC = () => {
@@ -401,7 +401,7 @@ export const RiskMapPage: React.FC = () => {
           </div>
 
           {/* Large Interactive Leaflet Map */}
-          <div className="relative w-full">
+          <div className="relative w-full h-[400px] sm:h-[500px] lg:h-[620px] overflow-hidden">
             <AdvancedMap
               center={[22.5, 82.0]} // Centered on India
               zoom={5}
@@ -415,9 +415,8 @@ export const RiskMapPage: React.FC = () => {
               enableControls={true}
               flyToLocation={flyToCoords}
               style={{
-                height: '620px',
+                height: '100%',
                 width: '100%',
-                minHeight: '440px',
               }}
             />
           </div>
@@ -429,29 +428,20 @@ export const RiskMapPage: React.FC = () => {
         </div>
 
         {/* Right: Selected Location & AI Briefing (Self-Hugging Height) */}
-        <div className="lg:col-span-4 self-start h-fit rounded-xl bg-[#101F18] border border-emerald-950 overflow-hidden shadow-sm flex flex-col">
-          <div className="px-5 py-4 border-b border-emerald-950/80 bg-[#0D1914] flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-400" />
-              <h3 className="text-[17px] sm:text-[18px] font-bold tracking-tight text-[#F2F5F2]">
-                Selected Location Analysis
+        <div className="lg:col-span-4 self-start h-fit rounded-xl bg-[#101F18] border border-emerald-950/80 overflow-hidden shadow-sm flex flex-col">
+          <div className="px-4 py-3 border-b border-emerald-950/80 bg-[#0D1914] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <h3 className="text-xs font-bold font-mono uppercase tracking-wider text-[#F2F5F2]">
+                Target Location Intelligence
               </h3>
             </div>
-            <span className="text-[13px] text-emerald-400 font-medium">150 km Radius</span>
+            <span className="text-[11px] font-mono text-[#9CAEA2]">Synchronous Buffer</span>
           </div>
 
           <div className="p-0">
-            <PlacePanel place={selectedPlace} />
+            <PlacePanel place={selectedPlace} fires={fires.data} forest={forest.data} />
           </div>
-        </div>
-      </div>
-
-      {/* Methodology & Data Provenance Notice */}
-      <div className="flex items-start gap-3 p-5 rounded-xl bg-[#0D1914] border border-emerald-950/80 text-[14px] sm:text-[15px] text-[#9CAEA2] leading-relaxed">
-        <Info className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-        <div>
-          <span className="font-semibold text-[#F2F5F2]">Cartographic Integrity Notice: </span>
-          Thermal anomalies represent satellite sensor pixel observations (375m VIIRS). Air quality metrics reflect Open-Meteo European CAMS multi-pollutant dispersion simulations across primary metropolitan centers. Forest loss geometries reflect curated Global Forest Watch reference biomes. No coordinates or predictive polygons are simulated or fabricated.
         </div>
       </div>
     </div>

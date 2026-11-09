@@ -14,6 +14,7 @@ import {
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { Search, MapPin, Satellite, Map as MapIcon, Loader2, X, AlertCircle } from "lucide-react";
 
 // Fix for default markers in React-Leaflet
 // @ts-expect-error - Leaflet private property deletion
@@ -222,181 +223,307 @@ const MapResizeHandler: React.FC = () => {
   return null;
 };
 
-// Custom control component
-const CustomControls: React.FC<{
+interface MapFloatingToolbarProps {
+  onSearch?: (result: { latLng: [number, number]; name: string }) => void;
   onLocate: () => void;
+  isLocating: boolean;
+  locateError: string | null;
   onToggleLayer: (layer: "satellite" | "traffic") => void;
   layers: { openstreetmap?: boolean; satellite?: boolean; traffic?: boolean };
-}> = ({ onLocate, onToggleLayer, layers }) => {
+}
+
+// Compact Floating Map Toolbar (Search, Locate, Satellite, Street)
+const MapFloatingToolbar: React.FC<MapFloatingToolbarProps> = ({
+  onSearch,
+  onLocate,
+  isLocating,
+  locateError,
+  onToggleLayer,
+  layers,
+}) => {
   const map = useMap();
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [suggestions, setSuggestions] = useState<Array<{ name: string; lat: number; lon: number }>>([]);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   useEffect(() => {
-    const control = new L.Control({ position: "topright" });
+    if (toolbarRef.current) {
+      L.DomEvent.disableClickPropagation(toolbarRef.current);
+      L.DomEvent.disableScrollPropagation(toolbarRef.current);
+    }
+  }, []);
 
-    control.onAdd = () => {
-      const div = L.DomUtil.create("div", "custom-controls");
-      div.innerHTML = `
-        <div style="background: rgba(13, 25, 20, 0.95); backdrop-filter: blur(8px); padding: 7px; border-radius: 9px; border: 1px solid rgba(16, 185, 129, 0.35); box-shadow: 0 4px 14px rgba(0,0,0,0.4); display: flex; flex-direction: column; gap: 5px;">
-          <button id="locate-btn" style="margin: 2px; padding: 7px 12px; border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 6px; cursor: pointer; background: #142820; color: #a7f3d0; font-size: 14px; font-weight: 600; font-family: 'Lora', serif;">📍 Locate Me</button>
-          <button id="satellite-btn" style="margin: 2px; padding: 7px 12px; border: 1px solid ${layers.satellite ? '#10b981' : 'rgba(16, 185, 129, 0.4)'}; border-radius: 6px; cursor: pointer; background: ${layers.satellite ? '#065f46' : '#142820'}; color: #a7f3d0; font-size: 14px; font-weight: 600; font-family: 'Lora', serif;">🛰️ Satellite</button>
-          <button id="traffic-btn" style="margin: 2px; padding: 7px 12px; border: 1px solid ${layers.traffic ? '#10b981' : 'rgba(16, 185, 129, 0.4)'}; border-radius: 6px; cursor: pointer; background: ${layers.traffic ? '#065f46' : '#142820'}; color: #a7f3d0; font-size: 14px; font-weight: 600; font-family: 'Lora', serif;">🚦 OpenStreet</button>
-        </div>
-      `;
-
-      L.DomEvent.disableClickPropagation(div);
-
-      const locateBtn = div.querySelector("#locate-btn") as HTMLButtonElement | null;
-      const satelliteBtn = div.querySelector("#satellite-btn") as HTMLButtonElement | null;
-      const trafficBtn = div.querySelector("#traffic-btn") as HTMLButtonElement | null;
-
-      if (locateBtn) locateBtn.onclick = () => onLocate();
-      if (satelliteBtn) satelliteBtn.onclick = () => onToggleLayer("satellite");
-      if (trafficBtn) trafficBtn.onclick = () => onToggleLayer("traffic");
-
-      return div;
-    };
-
-    control.addTo(map);
-
-    return () => {
-      control.remove();
-    };
-  }, [map, onLocate, onToggleLayer, layers]);
-
-  return null;
-};
-
-// Search component - pinned to the top-left corner
-const SearchControl: React.FC<{
-  onSearch?: (result: { latLng: [number, number]; name: string }) => void;
-}> = ({ onSearch }) => {
-  const map = useMap();
-  const onSearchRef = useRef(onSearch);
-  onSearchRef.current = onSearch;
-
+  // Auto-focus input when search expands
   useEffect(() => {
-    const control = new L.Control({ position: "topleft" });
+    if (isSearchOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [isSearchOpen]);
 
-    control.onAdd = () => {
-      const div = L.DomUtil.create("div", "search-control");
-      div.innerHTML = `
-        <div style="background: rgba(13, 25, 20, 0.95); backdrop-filter: blur(8px); padding: 7px; border-radius: 9px; border: 1px solid rgba(16, 185, 129, 0.4); box-shadow: 0 4px 14px rgba(0,0,0,0.5); display: flex; gap: 7px; align-items: center; margin-top: 2px; margin-left: 2px;">
-          <input 
-            id="search-input" 
-            type="text" 
-            placeholder="Search places or coordinates..." 
-            style="padding: 8px 12px; border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 6px; width: 220px; max-width: calc(100vw - 190px); background: #0A1712; color: #F2F5F2; font-size: 15px; font-family: 'Lora', serif; outline: none;"
-          />
-          <button 
-            id="search-btn" 
+  // Click outside listener
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (toolbarRef.current && !toolbarRef.current.contains(e.target as Node)) {
+        setIsSearchOpen(false);
+        setSuggestions([]);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, []);
+
+  // Escape key listener
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsSearchOpen(false);
+        setSuggestions([]);
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
+
+  const handleSelectResult = (item: { name: string; lat: number; lon: number }) => {
+    map.flyTo([item.lat, item.lon], 12);
+    if (onSearch) {
+      onSearch({ latLng: [item.lat, item.lon], name: item.name });
+    }
+    setIsSearchOpen(false);
+    setSuggestions([]);
+    setSearchQuery("");
+  };
+
+  const executeSearch = async (overrideQuery?: string) => {
+    const q = (overrideQuery ?? searchQuery).trim();
+    if (!q) return;
+
+    // Check coordinates "lat, lon"
+    const coordMatch = q.match(/^([-+]?\d+(\.\d+)?)\s*,\s*([-+]?\d+(\.\d+)?)$/);
+    if (coordMatch) {
+      const lat = parseFloat(coordMatch[1]);
+      const lon = parseFloat(coordMatch[3]);
+      if (!isNaN(lat) && !isNaN(lon)) {
+        if (lat >= 6.5 && lat <= 37.5 && lon >= 68.0 && lon <= 97.5) {
+          handleSelectResult({
+            name: `Indian Coordinates (${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E)`,
+            lat,
+            lon,
+          });
+          return;
+        } else {
+          setSearchError("Coordinates fall outside India (6.5°–37.5°N, 68.0°–97.5°E).");
+          setTimeout(() => setSearchError(null), 3500);
+          return;
+        }
+      }
+    }
+
+    setIsSearching(true);
+    setSearchError(null);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&countrycodes=in&limit=5&q=${encodeURIComponent(q)}`
+      );
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const results = data.map((d: any) => ({
+          name: d.display_name,
+          lat: parseFloat(d.lat),
+          lon: parseFloat(d.lon),
+        }));
+        setSuggestions(results);
+        if (overrideQuery === undefined) {
+          handleSelectResult(results[0]);
+        }
+      } else {
+        setSearchError("No locations found in India.");
+        setTimeout(() => setSearchError(null), 3500);
+      }
+    } catch {
+      setSearchError("Search service temporarily unavailable.");
+      setTimeout(() => setSearchError(null), 3500);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  return (
+    <div
+      ref={toolbarRef}
+      className="absolute top-3 right-3 z-[1000] flex flex-col items-end gap-1.5"
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+    >
+      {/* Floating Toolbar Pill */}
+      <div className="flex items-center gap-1 p-1 rounded-xl bg-[#0B1713]/95 backdrop-blur-md border border-emerald-900/60 shadow-xl shadow-black/50">
+        {/* Search Control */}
+        {isSearchOpen ? (
+          <div className="flex items-center gap-1.5 bg-[#07120E] border border-emerald-500/70 rounded-lg px-2.5 py-1 shadow-inner transition-all duration-300 w-52 min-[420px]:w-64 sm:w-72">
+            <Search className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearchQuery(val);
+                if (val.length > 2) {
+                  fetch(
+                    `https://nominatim.openstreetmap.org/search?format=json&countrycodes=in&limit=4&q=${encodeURIComponent(val)}`
+                  )
+                    .then((r) => r.json())
+                    .then((data) => {
+                      if (Array.isArray(data)) {
+                        setSuggestions(
+                          data.map((d: any) => ({
+                            name: d.display_name,
+                            lat: parseFloat(d.lat),
+                            lon: parseFloat(d.lon),
+                          }))
+                        );
+                      }
+                    })
+                    .catch(() => {});
+                } else {
+                  setSuggestions([]);
+                }
+              }}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  executeSearch();
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setIsSearchOpen(false);
+                  setSuggestions([]);
+                }
+              }}
+              placeholder="Search Indian cities or locations..."
+              className="w-full bg-transparent text-xs text-[#F2F5F2] placeholder-[#82978B] outline-none font-sans"
+            />
+            {isSearching ? (
+              <Loader2 className="w-3.5 h-3.5 text-emerald-400 animate-spin shrink-0" />
+            ) : searchQuery ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setSuggestions([]);
+                }}
+                className="text-[#9CAEA2] hover:text-[#F2F5F2] p-0.5 cursor-pointer"
+                title="Clear input"
+                aria-label="Clear search input"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setIsSearchOpen(false);
+                setSuggestions([]);
+              }}
+              title="Close search (Esc)"
+              aria-label="Close search"
+              className="text-[#9CAEA2] hover:text-[#F2F5F2] text-[11px] font-mono px-1 border-l border-emerald-950/80 ml-0.5 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <button
             type="button"
-            title="Search location"
-            style="padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer; background: #10b981; color: #022c22; font-size: 15px; font-weight: bold; font-family: 'Lora', serif; display: flex; align-items: center; justify-content: center;"
+            onClick={() => setIsSearchOpen(true)}
+            title="Search Indian cities or coordinates"
+            aria-label="Search Indian cities or coordinates"
+            className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#101F18]/90 hover:bg-[#174C34] text-[#CBDAD0] hover:text-[#F2F5F2] border border-emerald-900/60 transition-all cursor-pointer shadow-sm"
           >
-            🔍
+            <Search className="w-4 h-4 text-emerald-400" />
           </button>
+        )}
+
+        {/* Locate Me Button */}
+        <button
+          type="button"
+          onClick={onLocate}
+          disabled={isLocating}
+          title="Locate current position"
+          aria-label="Locate current position"
+          className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#101F18]/90 hover:bg-[#174C34] text-[#CBDAD0] hover:text-[#F2F5F2] border border-emerald-900/60 transition-all cursor-pointer shadow-sm disabled:opacity-60"
+        >
+          {isLocating ? (
+            <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+          ) : (
+            <MapPin className="w-4 h-4 text-emerald-400" />
+          )}
+        </button>
+
+        {/* Satellite Layer Toggle */}
+        <button
+          type="button"
+          onClick={() => onToggleLayer("satellite")}
+          title="Satellite Imagery Layer"
+          aria-label="Toggle satellite layer"
+          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all cursor-pointer shadow-sm ${
+            layers.satellite
+              ? "bg-[#174C34] border-emerald-400 text-emerald-300 ring-1 ring-emerald-500/50"
+              : "bg-[#101F18]/90 hover:bg-[#174C34] text-[#CBDAD0] hover:text-[#F2F5F2] border-emerald-900/60 border"
+          }`}
+        >
+          <Satellite className="w-4 h-4" />
+        </button>
+
+        {/* Street Map Layer Toggle */}
+        <button
+          type="button"
+          onClick={() => onToggleLayer("traffic")}
+          title="Street Map Layer"
+          aria-label="Toggle street map layer"
+          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all cursor-pointer shadow-sm ${
+            !layers.satellite
+              ? "bg-[#174C34] border-emerald-400 text-emerald-300 ring-1 ring-emerald-500/50"
+              : "bg-[#101F18]/90 hover:bg-[#174C34] text-[#CBDAD0] hover:text-[#F2F5F2] border-emerald-900/60 border"
+          }`}
+        >
+          <MapIcon className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Suggestions Dropdown */}
+      {isSearchOpen && suggestions.length > 0 && (
+        <div className="w-64 sm:w-72 max-w-[calc(100vw-32px)] rounded-xl bg-[#0B1713]/98 backdrop-blur-md border border-emerald-900/80 shadow-2xl overflow-hidden py-1 divide-y divide-emerald-950/60 z-[1001]">
+          {suggestions.map((item, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => handleSelectResult(item)}
+              className="w-full text-left px-3 py-2 text-xs text-[#CBDAD0] hover:bg-[#14251C] hover:text-[#F2F5F2] transition-colors flex items-center gap-2 cursor-pointer"
+            >
+              <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="truncate">{item.name}</span>
+            </button>
+          ))}
         </div>
-      `;
+      )}
 
-      L.DomEvent.disableClickPropagation(div);
-      L.DomEvent.disableScrollPropagation(div);
-
-      const input = div.querySelector("#search-input") as HTMLInputElement | null;
-      const button = div.querySelector("#search-btn") as HTMLButtonElement | null;
-
-      const executeSearch = async () => {
-        if (!input) return;
-        const query = input.value.trim();
-        if (!query) return;
-
-        // Feedback: loading state
-        if (button) button.innerHTML = "⏳";
-
-        // Check if query is coordinates format "lat, lon"
-        const coordMatch = query.match(/^([-+]?\d+(\.\d+)?)\s*,\s*([-+]?\d+(\.\d+)?)$/);
-        if (coordMatch) {
-          const lat = parseFloat(coordMatch[1]);
-          const lon = parseFloat(coordMatch[3]);
-          if (!isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
-            const latLng: [number, number] = [lat, lon];
-            map.flyTo(latLng, 13);
-            if (onSearchRef.current) {
-              onSearchRef.current({ latLng, name: `Coordinates: ${lat.toFixed(4)}, ${lon.toFixed(4)}` });
-            }
-            if (button) button.innerHTML = "🔍";
-            return;
-          }
-        }
-
-        try {
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&countrycodes=in&q=${encodeURIComponent(query)}`
-          );
-          const results = await response.json();
-
-          if (results && results.length > 0) {
-            const { lat, lon, display_name } = results[0];
-            const latLng: [number, number] = [parseFloat(lat), parseFloat(lon)];
-            map.flyTo(latLng, 13);
-            if (onSearchRef.current) {
-              onSearchRef.current({ latLng, name: display_name });
-            }
-          } else {
-            // Visual feedback: brief red outline
-            input.style.borderColor = "#ef4444";
-            input.placeholder = "Location not found...";
-            setTimeout(() => {
-              if (input) {
-                input.style.borderColor = "rgba(16, 185, 129, 0.4)";
-                input.placeholder = "Search places or coordinates...";
-              }
-            }, 2500);
-          }
-        } catch (error) {
-          console.error("Search error:", error);
-          if (input) {
-            input.style.borderColor = "#ef4444";
-            setTimeout(() => {
-              if (input) input.style.borderColor = "rgba(16, 185, 129, 0.4)";
-            }, 2000);
-          }
-        } finally {
-          if (button) button.innerHTML = "🔍";
-        }
-      };
-
-      if (input) {
-        // Prevent Leaflet keyboard shortcuts from intercepting typing in search bar
-        input.addEventListener("keydown", (e) => {
-          e.stopPropagation();
-          if (e.key === "Enter") {
-            e.preventDefault();
-            executeSearch();
-          }
-        });
-        input.addEventListener("keyup", (e) => e.stopPropagation());
-        input.addEventListener("keypress", (e) => e.stopPropagation());
-      }
-
-      if (button) {
-        button.addEventListener("click", (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          executeSearch();
-        });
-      }
-
-      return div;
-    };
-
-    control.addTo(map);
-
-    return () => {
-      control.remove();
-    };
-  }, [map]);
-
-  return null;
+      {/* Error Toast */}
+      {(locateError || searchError) && (
+        <div className="bg-red-950/95 backdrop-blur-md border border-red-800/80 text-red-300 text-xs px-3 py-1.5 rounded-lg shadow-xl flex items-center gap-1.5 max-w-xs animate-in fade-in slide-in-from-top-1 duration-200">
+          <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+          <span className="leading-tight">{locateError || searchError}</span>
+        </div>
+      )}
+    </div>
+  );
 };
 
 // Main AdvancedMap component
@@ -425,6 +552,8 @@ export const AdvancedMap: React.FC<AdvancedMapProps> = ({
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [searchResult, setSearchResult] = useState<{ latLng: [number, number]; name: string } | null>(null);
   const [clickedLocation, setClickedLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locateError, setLocateError] = useState<string | null>(null);
 
   // Handle layer toggling
   const handleToggleLayer = useCallback((layerType: "satellite" | "traffic") => {
@@ -443,20 +572,41 @@ export const AdvancedMap: React.FC<AdvancedMapProps> = ({
     });
   }, []);
 
-  // Handle geolocation
+  // Handle geolocation with India bounds check and error feedback
   const handleLocate = useCallback(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          setUserLocation([latitude, longitude]);
-        },
-        (error) => {
-          console.error("Geolocation error:", error);
-        }
-      );
+    if (!navigator.geolocation) {
+      setLocateError("Geolocation is not supported by your browser.");
+      setTimeout(() => setLocateError(null), 3500);
+      return;
     }
-  }, []);
+
+    setIsLocating(true);
+    setLocateError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsLocating(false);
+        const { latitude, longitude } = pos.coords;
+        if (latitude >= 6.5 && latitude <= 37.5 && longitude >= 68.0 && longitude <= 97.5) {
+          const coords: [number, number] = [latitude, longitude];
+          setUserLocation(coords);
+          if (onMapClick) {
+            onMapClick({ lat: latitude, lon: longitude, lng: longitude });
+          }
+        } else {
+          setLocateError(`Location (${latitude.toFixed(2)}°, ${longitude.toFixed(2)}°) is outside India boundary.`);
+          setTimeout(() => setLocateError(null), 4000);
+        }
+      },
+      (err) => {
+        setIsLocating(false);
+        const msg = err.code === 1 ? "Location permission denied by user." : "Could not determine your location.";
+        setLocateError(msg);
+        setTimeout(() => setLocateError(null), 3500);
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  }, [onMapClick]);
 
   // Handle map click
   const handleMapClickInternal = useCallback(
@@ -574,22 +724,22 @@ export const AdvancedMap: React.FC<AdvancedMapProps> = ({
           onLocationFound={(loc) => setUserLocation(loc)}
         />
 
-        {/* Search control */}
-        {enableSearch && (
-          <SearchControl
-            onSearch={(res) => {
-              setSearchResult(res);
-              if (onMapClick) {
-                onMapClick({ lat: res.latLng[0], lon: res.latLng[1], lng: res.latLng[1] });
-              }
-            }}
-          />
-        )}
-
-        {/* Custom controls */}
+        {/* Compact Floating Map Toolbar (Search, Locate, Satellite, Street) */}
         {enableControls && (
-          <CustomControls
+          <MapFloatingToolbar
+            onSearch={
+              enableSearch
+                ? (res) => {
+                    setSearchResult(res);
+                    if (onMapClick) {
+                      onMapClick({ lat: res.latLng[0], lon: res.latLng[1], lng: res.latLng[1] });
+                    }
+                  }
+                : undefined
+            }
             onLocate={handleLocate}
+            isLocating={isLocating}
+            locateError={locateError}
             onToggleLayer={handleToggleLayer}
             layers={currentLayers}
           />
@@ -609,14 +759,14 @@ export const AdvancedMap: React.FC<AdvancedMapProps> = ({
               >
                 {marker.popupObj && (
                   <Popup>
-                    <div style={{ maxWidth: "min(320px, 85vw)", color: "#111", fontFamily: "'Lora', serif" }}>
+                    <div style={{ maxWidth: "min(320px, 85vw)", color: "#111", fontFamily: "var(--font-sans)" }}>
                       {marker.popupObj.title && (
-                        <h3 style={{ margin: "0 0 6px 0", fontSize: "17px", fontWeight: "bold", fontFamily: "'Lora', serif" }}>
+                        <h3 style={{ margin: "0 0 6px 0", fontSize: "16px", fontWeight: "bold", fontFamily: "var(--font-sans)" }}>
                           {marker.popupObj.title}
                         </h3>
                       )}
                       {marker.popupObj.content && (
-                        <p style={{ margin: "0 0 6px 0", fontSize: "15px", lineHeight: "1.5", fontFamily: "'Lora', serif" }}>
+                        <p style={{ margin: "0 0 6px 0", fontSize: "14px", lineHeight: "1.5", fontFamily: "var(--font-sans)" }}>
                           {marker.popupObj.content}
                         </p>
                       )}
@@ -634,7 +784,7 @@ export const AdvancedMap: React.FC<AdvancedMapProps> = ({
                         />
                       )}
                       {marker.measurements && marker.measurements.length > 0 && (
-                        <div style={{ marginTop: "8px", borderTop: "1px solid #e5e7eb", paddingTop: "6px", fontSize: "13px", fontFamily: "'Lora', serif" }}>
+                        <div style={{ marginTop: "8px", borderTop: "1px solid #e5e7eb", paddingTop: "6px", fontSize: "13px", fontFamily: "var(--font-sans)" }}>
                           {marker.measurements.map((m, idx) => (
                             <div key={idx} style={{ display: "flex", justifyContent: "space-between", margin: "3px 0" }}>
                               <span style={{ color: "#6b7280" }}>{m.label}:</span>
@@ -661,13 +811,13 @@ export const AdvancedMap: React.FC<AdvancedMapProps> = ({
             >
               {marker.popupObj && (
                 <Popup>
-                  <div style={{ maxWidth: "min(320px, 85vw)", color: "#111", fontFamily: "'Lora', serif" }}>
+                  <div style={{ maxWidth: "min(300px, 80vw)", color: "#111", fontFamily: "var(--font-sans)" }}>
                     {marker.popupObj.title && (
-                      <h3 style={{ margin: "0 0 6px 0", fontSize: "17px", fontWeight: "bold", fontFamily: "'Lora', serif" }}>
+                      <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", fontWeight: "bold", fontFamily: "var(--font-sans)" }}>
                         {marker.popupObj.title}
                       </h3>
                     )}
-                    <p style={{ margin: "0 0 6px 0", fontSize: "15px", lineHeight: "1.5", fontFamily: "'Lora', serif" }}>
+                    <p style={{ margin: "0 0 4px 0", fontSize: "14px", lineHeight: "1.5", fontFamily: "var(--font-sans)" }}>
                       {marker.popupObj.content}
                     </p>
                     {marker.popupObj.image && (

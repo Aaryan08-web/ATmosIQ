@@ -151,7 +151,7 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
                 transition={animationTransition}
                 className="flex items-center gap-1.5 overflow-hidden whitespace-nowrap pl-0.5"
               >
-                <span className="font-bold text-[22px] text-[#F2F5F2] tracking-tight truncate">
+                <span className="font-bold font-serif text-[22px] text-[#F2F5F2] tracking-tight truncate">
                   ATmosIQ
                 </span>
                 <Leaf className="w-4 h-4 text-emerald-400 fill-emerald-400/40 shrink-0" />
@@ -164,7 +164,7 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
         <button
           type="button"
           onClick={onCloseMobile}
-          className="flex md:hidden items-center justify-center w-8 h-8 rounded-lg text-[#9CAEA2] hover:text-[#F2F5F2] hover:bg-[#14251C] cursor-pointer"
+          className="flex md:hidden items-center justify-center w-9 h-9 min-h-[36px] min-w-[36px] rounded-lg text-[#9CAEA2] hover:text-[#F2F5F2] hover:bg-[#14251C] transition-colors cursor-pointer"
           aria-label="Close menu"
         >
           <X className="w-5 h-5" />
@@ -215,7 +215,7 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
                   key={item.path}
                   to={item.path}
                   title={!isExpanded ? item.title : undefined}
-                  className={`group relative rounded-xl text-[16px] font-medium transition-all duration-200 cursor-pointer flex items-center ${
+                  className={`group relative rounded-xl text-[14px] font-medium transition-all duration-200 cursor-pointer flex items-center ${
                     isExpanded
                       ? 'gap-3 px-3 py-2 w-full justify-start'
                       : 'w-11 h-11 mx-auto justify-center p-0'

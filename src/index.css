@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Lora", Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-serif: "Lora", Georgia, Cambria, "Times New Roman", Times, serif;
 }
 
@@ -35,16 +35,24 @@
   --color-atmos-card: #14251C;
 }
 
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 html {
   scroll-behavior: smooth;
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 
 body {
   margin: 0;
   padding: 0;
+  max-width: 100vw;
+  overflow-x: hidden;
   background-color: #0B1713;
   color: #F2F5F2;
-  font-family: "Lora", serif;
+  font-family: var(--font-sans);
   font-optical-sizing: auto;
   font-weight: 400;
   font-style: normal;
@@ -52,8 +60,37 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-h1, h2, h3, h4, h5, h6, p, span, a, button, input, select, textarea, label {
-  font-family: "Lora", serif;
+/* Container-query-aware grid for responsive intelligence panels */
+.place-panel-container {
+  container-type: inline-size;
+}
+
+.place-panel-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+@container (min-width: 820px) {
+  .place-panel-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.875rem;
+  }
+}
+
+/* Typography utility classes */
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+.font-sans {
+  font-family: var(--font-sans);
+}
+
+.font-heading {
+  font-family: var(--font-serif);
+  letter-spacing: -0.015em;
 }
 
 /* Custom scrollbar for data tables and side panels */
@@ -72,28 +109,7 @@ h1, h2, h3, h4, h5, h6, p, span, a, button, input, select, textarea, label {
   background: #2E8B57;
 }
 
-/* Global Lora Typography helper classes */
-.font-lora {
-  font-family: "Lora", serif;
-  font-optical-sizing: auto;
-  font-style: normal;
-}
-
-.dashboard-root {
-  font-family: "Lora", serif;
-  font-optical-sizing: auto;
-}
-
-.dashboard-root h1,
-.dashboard-root h2,
-.dashboard-root h3,
-.dashboard-root h4,
-.dashboard-root .font-heading {
-  font-family: "Lora", serif;
-  letter-spacing: -0.015em;
-}
-
-/* Sleek Dark Leaflet Zoom Controls in Bottom-Left Corner */
+/* Leaflet Zoom Controls styling */
 .leaflet-bottom.leaflet-left {
   margin-left: 8px !important;
   margin-bottom: 8px !important;
@@ -119,4 +135,3 @@ h1, h2, h3, h4, h5, h6, p, span, a, button, input, select, textarea, label {
   background-color: #142820 !important;
   color: #34d399 !important;
 }
-

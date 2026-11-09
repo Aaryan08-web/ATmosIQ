@@ -886,7 +886,7 @@ export const EnvironmentalDashboard: React.FC<Props> = ({
                 <span className="text-xs font-mono text-emerald-400/90 font-medium">Active Buffer</span>
               </div>
               <div className="p-0">
-                <PlacePanel place={selected} />
+                <PlacePanel place={selected} fires={fires.data} forest={forest.data} />
               </div>
             </aside>
           </div>

@@ -106,14 +106,14 @@ export const DashboardLayout: React.FC = () => {
       />
 
       {/* Main Application Area */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen overflow-x-hidden">
         <DashboardHeader
           user={user}
           onOpenMobileSidebar={() => setMobileOpen(true)}
           activeAlertCount={activeAlertCount}
         />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-8">
+        <main className="flex-1 p-3 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6 sm:space-y-8 min-w-0">
           <Outlet context={contextValue} />
         </main>
       </div>

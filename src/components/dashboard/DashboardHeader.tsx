@@ -78,13 +78,13 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
   const isToday = customDate === getTodayISO();
 
   return (
-    <header className="h-16 px-4 sm:px-6 bg-[#0D1914]/90 backdrop-blur-md border-b border-emerald-950/80 sticky top-0 z-20 flex items-center justify-between gap-4">
+    <header className="h-16 px-3 sm:px-6 bg-[#0D1914]/90 backdrop-blur-md border-b border-emerald-950/80 sticky top-0 z-20 flex items-center justify-between gap-3 sm:gap-4">
       {/* Left: Mobile Toggle & Breadcrumb / Title */}
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
         <button
           type="button"
           onClick={onOpenMobileSidebar}
-          className="p-1.5 -ml-1 text-[#9CAEA2] hover:text-[#F2F5F2] hover:bg-[#14251C] rounded-lg md:hidden shrink-0 border border-emerald-950"
+          className="p-2 -ml-1 text-[#9CAEA2] hover:text-[#F2F5F2] hover:bg-[#14251C] rounded-lg md:hidden shrink-0 border border-emerald-950/80 min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer transition-colors"
           aria-label="Open navigation menu"
         >
           <Menu className="w-5 h-5" />
@@ -92,7 +92,7 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
 
         <NavLink
           to="/dashboard"
-          className="flex items-center gap-2 text-lg sm:text-xl font-bold text-[#F2F5F2] hover:text-emerald-400 transition-colors tracking-tight focus:outline-none"
+          className="flex items-center gap-2 text-lg sm:text-xl font-bold font-serif text-[#F2F5F2] hover:text-emerald-400 transition-colors tracking-tight focus:outline-none"
         >
           <span>ATmosIQ</span>
           <Leaf className="w-4 h-4 text-emerald-400 fill-emerald-400/40 shrink-0" />

@@ -5,12 +5,12 @@ import { DashboardWelcome } from '@/components/dashboard/DashboardWelcome';
 import { EnvironmentalKpiGrid } from '@/components/dashboard/EnvironmentalKpiGrid';
 import { EnvironmentalMap } from '@/components/dashboard/EnvironmentalMap';
 import { EnvironmentalTrends } from '@/components/dashboard/EnvironmentalTrends';
-import { MapPin, AlertTriangle, ArrowRight, Flame, ShieldAlert, Wind } from 'lucide-react';
+import { MapPin, AlertTriangle, ArrowRight, Flame, ShieldAlert, Wind, TreeDeciduous } from 'lucide-react';
 import type { SelectedPlace } from '@/types';
 
 export const OverviewPage: React.FC = () => {
   const navigate = useNavigate();
-  const { overview, fires, air, forest, refreshAll, selectedPlace, setSelectedPlace } = useDashboardContext();
+  const { overview, fires, air, forest, selectedPlace, setSelectedPlace } = useDashboardContext();
 
   const PRIORITY_LOCATIONS: {
     name: string;
@@ -18,16 +18,16 @@ export const OverviewPage: React.FC = () => {
     lat: number;
     lon: number;
     risk: 'Critical' | 'High' | 'Elevated';
-    reason: string;
+    description: string;
     details: string[];
   }[] = [
     {
-      name: 'Delhi NCR Environmental Observatory',
-      region: 'National Capital Region, India',
+      name: 'Delhi NCR',
+      region: 'National Capital Region',
       lat: 28.6139,
       lon: 77.2090,
       risk: 'Critical',
-      reason: 'Dense urban atmospheric particulate accumulation & Indo-Gangetic basin inversion',
+      description: 'Elevated atmospheric pollution across the metropolitan region.',
       details: [
         'Open-Meteo CAMS live atmospheric telemetry active',
         'Multi-pollutant dispersion tracking PM2.5, PM10, NO2',
@@ -35,12 +35,12 @@ export const OverviewPage: React.FC = () => {
       ],
     },
     {
-      name: 'Western Ghats · Nilgiri Biosphere Core',
-      region: 'Western Ghats, Kerala / Tamil Nadu / Karnataka',
+      name: 'Western Ghats',
+      region: 'Kerala / Karnataka / Tamil Nadu',
       lat: 11.4500,
       lon: 76.6500,
       risk: 'High',
-      reason: 'UNESCO World Heritage biodiversity hotspot & canopy fragmentation pressures',
+      description: 'Forest ecosystem and canopy disturbance monitoring.',
       details: [
         'Global Forest Watch Indian AOI satellite surveillance active',
         'Tropical wet evergreen and montane shola forest buffer',
@@ -48,12 +48,12 @@ export const OverviewPage: React.FC = () => {
       ],
     },
     {
-      name: 'Sundarbans Mangrove Delta Observatory',
-      region: 'Sundarbans Biosphere, West Bengal',
+      name: 'Sundarbans',
+      region: 'West Bengal',
       lat: 21.9500,
       lon: 88.8500,
       risk: 'Critical',
-      reason: 'Tidal delta salinity intrusion, mangrove loss & intense cyclonic storm surges',
+      description: 'Coastal ecosystem and mangrove disturbance monitoring.',
       details: [
         'Tidal mangrove ecosystem monitoring',
         'Coastal halophytic forest buffer surveillance',
@@ -61,12 +61,12 @@ export const OverviewPage: React.FC = () => {
       ],
     },
     {
-      name: 'Pune & Western Ghats Rain Shadow Observatory',
-      region: 'Maharashtra, India',
+      name: 'Pune & Western Ghats',
+      region: 'Maharashtra',
       lat: 18.5204,
       lon: 73.8567,
       risk: 'Elevated',
-      reason: 'Deccan plateau urban expansion & Western Ghats catchment buffer',
+      description: 'Urban expansion and regional ecosystem monitoring.',
       details: [
         'Continuous CAMS multi-pollutant telemetry',
         'Mutha river catchment & Sahyadri hill corridor',
@@ -89,6 +89,8 @@ export const OverviewPage: React.FC = () => {
   const recentAlerts = useMemo(() => {
     const list: {
       id: string;
+      category: 'Air Quality' | 'Fire Activity' | 'Forest Alert';
+      icon: React.ComponentType<{ className?: string }>;
       title: string;
       location: string;
       severity: 'Critical' | 'High' | 'Moderate';
@@ -99,14 +101,16 @@ export const OverviewPage: React.FC = () => {
     // Unhealthy air cities
     (air.data?.points ?? [])
       .filter((p): p is typeof p & { usAqi: number } => p.usAqi != null && p.usAqi > 150)
-      .slice(0, 3)
+      .slice(0, 2)
       .forEach((p, idx) => {
         list.push({
           id: `aq-${idx}`,
+          category: 'Air Quality',
+          icon: Wind,
           title: `AQI ${p.usAqi} (${p.category})`,
           location: `${p.name}, ${p.country}`,
           severity: p.usAqi > 200 ? 'Critical' : 'High',
-          source: 'Open-Meteo / CAMS',
+          source: 'Copernicus CAMS',
           time: 'Active stream',
         });
       });
@@ -116,11 +120,13 @@ export const OverviewPage: React.FC = () => {
     if (topFire && topFire.frp > 80) {
       list.push({
         id: 'fire-top',
+        category: 'Fire Activity',
+        icon: Flame,
         title: `Thermal anomaly: ${Math.round(topFire.frp)} MW radiative power`,
         location: `${topFire.lat.toFixed(2)}°N, ${topFire.lon.toFixed(2)}°E`,
         severity: topFire.frp > 120 ? 'Critical' : 'High',
-        source: 'NASA FIRMS VIIRS',
-        time: topFire.acquired || 'Last pass',
+        source: 'NASA FIRMS',
+        time: topFire.acquired || 'Recent pass',
       });
     }
 
@@ -129,23 +135,27 @@ export const OverviewPage: React.FC = () => {
     if (topLiveGfw) {
       list.push({
         id: `gfw-${topLiveGfw.alert_id}`,
-        title: `GFW Alert: ${topLiveGfw.confidence} confidence canopy loss`,
+        category: 'Forest Alert',
+        icon: TreeDeciduous,
+        title: `Canopy disturbance (${topLiveGfw.confidence} confidence)`,
         location: `${topLiveGfw.latitude.toFixed(2)}°N, ${topLiveGfw.longitude.toFixed(2)}°E`,
         severity: topLiveGfw.confidence === 'high' ? 'Critical' : 'High',
-        source: 'Global Forest Watch (Live NRT)',
+        source: 'Global Forest Watch',
         time: topLiveGfw.alert_date,
       });
     }
 
-    // Critical forest loss hotspot (Curated Reference)
+    // Fallback: top curated reference forest hotspot
     const critForest = forest.data?.points.find((p) => p.severity === 'Critical');
     if (critForest && list.length < 4) {
       list.push({
         id: 'forest-top',
-        title: `Reference loss front: ${critForest.driver}`,
+        category: 'Forest Alert',
+        icon: TreeDeciduous,
+        title: `Canopy loss front: ${critForest.driver}`,
         location: `${critForest.name}, ${critForest.country}`,
         severity: 'Critical',
-        source: 'Global Forest Watch (Reference)',
+        source: 'Global Forest Watch (Ref)',
         time: 'Reference dataset',
       });
     }
@@ -154,14 +164,12 @@ export const OverviewPage: React.FC = () => {
   }, [air.data?.points, fires.data?.points, forest.data?.points, forest.data?.liveAlerts]);
 
   return (
-    <div className="space-y-8">
-      {/* 1. System Welcome & Status Banner */}
+    <div className="space-y-6 sm:space-y-8 min-w-0">
+      {/* 1. System Welcome & Status Banner (No Manual Refresh Button) */}
       <DashboardWelcome
         firesLive={fires.data?.live}
         aqAvailable={!!air.data}
         lastUpdated={overview.data?.airQuality?.fetchedAt || overview.data?.fires?.fetchedAt}
-        onRefresh={refreshAll}
-        loading={overview.loading || fires.loading || air.loading}
       />
 
       {/* 2. Four KPI Cards */}
@@ -174,7 +182,7 @@ export const OverviewPage: React.FC = () => {
       />
 
       {/* 3. Compact Map & Side Analysis */}
-      <div>
+      <div className="min-w-0">
         <EnvironmentalMap
           fires={fires.data}
           air={air.data}
@@ -185,63 +193,72 @@ export const OverviewPage: React.FC = () => {
       </div>
 
       {/* 4. Telemetry Spectrum & Trends Chart */}
-      <EnvironmentalTrends
-        air={air.data}
-        fires={fires.data}
-        loading={air.loading || fires.loading}
-      />
+      <div className="min-w-0">
+        <EnvironmentalTrends
+          air={air.data}
+          fires={fires.data}
+          loading={air.loading || fires.loading}
+        />
+      </div>
 
       {/* 5. Priority Locations & Recent Alerts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Three Priority Locations */}
-        <div className="lg:col-span-7 rounded-xl bg-[#101F18] border border-emerald-950 p-6 shadow-sm space-y-5">
-          <div className="flex items-center justify-between pb-3.5 border-b border-emerald-950/80">
-            <div className="flex items-center gap-2.5">
-              <ShieldAlert className="w-6 h-6 text-emerald-400" />
-              <h3 className="text-[22px] sm:text-[24px] font-bold text-[#F2F5F2] tracking-tight">Priority Environmental Fronts</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 min-w-0">
+        {/* Priority Monitoring Fronts */}
+        <div className="lg:col-span-7 rounded-xl bg-[#101F18] border border-emerald-950 p-4 sm:p-6 shadow-sm space-y-4 min-w-0">
+          <div className="flex items-center justify-between pb-3 border-b border-emerald-950/80">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-emerald-400 shrink-0" />
+              <h3 className="text-lg sm:text-xl font-bold font-serif text-[#F2F5F2] tracking-tight">
+                Priority Monitoring Fronts
+              </h3>
             </div>
-            <span className="text-[13px] text-[#9CAEA2]">3 Key Monitoring Zones</span>
+            <span className="text-xs text-[#9CAEA2] font-mono">4 Key Zones</span>
           </div>
 
-          <div className="space-y-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
             {PRIORITY_LOCATIONS.map((loc) => {
               const isSelected = selectedPlace?.lat === loc.lat && selectedPlace?.lon === loc.lon;
               return (
                 <div
                   key={loc.name}
                   onClick={() => handleSelectPriority(loc)}
-                  className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                  className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between min-w-0 ${
                     isSelected
-                      ? 'bg-[#142D21] border-emerald-500/80 shadow-md'
+                      ? 'bg-[#142D21] border-emerald-500/80 shadow-md ring-1 ring-emerald-500/30'
                       : 'bg-[#0D1914] border-emerald-950/80 hover:border-emerald-800 hover:bg-[#12241C]'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2">
-                        <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <h4 className="text-[18px] sm:text-[19px] font-bold text-[#F2F5F2]">{loc.name}</h4>
-                        <span
-                          className={`px-2 py-0.5 rounded text-[11px] font-semibold uppercase tracking-wider ${
-                            loc.risk === 'Critical'
-                              ? 'bg-red-950/70 text-red-300 border border-red-800/60'
-                              : 'bg-amber-950/70 text-amber-300 border border-amber-800/60'
-                          }`}
-                        >
-                          {loc.risk} Risk
-                        </span>
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <h4 className="text-base font-bold text-[#F2F5F2] truncate">{loc.name}</h4>
+                        </div>
+                        <p className="text-xs text-[#9CAEA2] pl-5 truncate">{loc.region}</p>
                       </div>
-                      <p className="text-[14px] text-[#9CAEA2] pl-6 font-medium">{loc.region}</p>
-                      <p className="text-[15px] sm:text-[16px] text-[#CBDAD0] pl-6 pt-1 leading-relaxed">{loc.reason}</p>
+
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 ${
+                          loc.risk === 'Critical'
+                            ? 'bg-red-950/70 text-red-300 border border-red-800/60'
+                            : loc.risk === 'High'
+                            ? 'bg-amber-950/70 text-amber-300 border border-amber-800/60'
+                            : 'bg-emerald-950/70 text-emerald-300 border border-emerald-800/60'
+                        }`}
+                      >
+                        {loc.risk} Risk
+                      </span>
                     </div>
 
-                    <button
-                      type="button"
-                      className="shrink-0 p-2 text-[14px] font-medium text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/60 rounded-lg transition-colors cursor-pointer"
-                      title="Inspect coordinates on map"
-                    >
-                      <ArrowRight className="w-5 h-5" />
-                    </button>
+                    <p className="text-xs text-[#CBDAD0] leading-relaxed line-clamp-2 pt-0.5">
+                      {loc.description}
+                    </p>
+                  </div>
+
+                  <div className="pt-3 mt-2 border-t border-emerald-950/60 flex items-center justify-between text-xs text-emerald-400 font-medium">
+                    <span>Inspect coordinates</span>
+                    <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
                   </div>
                 </div>
               );
@@ -249,50 +266,62 @@ export const OverviewPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Recent Real Environmental Alerts */}
-        <div className="lg:col-span-5 rounded-xl bg-[#101F18] border border-emerald-950 p-6 shadow-sm space-y-5 flex flex-col justify-between">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between pb-3.5 border-b border-emerald-950/80">
-              <div className="flex items-center gap-2.5">
-                <AlertTriangle className="w-6 h-6 text-amber-400" />
-                <h3 className="text-[22px] sm:text-[24px] font-bold text-[#F2F5F2] tracking-tight">Live Telemetry Alerts</h3>
+        {/* Live Telemetry Alerts */}
+        <div className="lg:col-span-5 rounded-xl bg-[#101F18] border border-emerald-950 p-4 sm:p-6 shadow-sm space-y-4 flex flex-col justify-between min-w-0">
+          <div className="space-y-3.5 min-w-0">
+            <div className="flex items-center justify-between pb-3 border-b border-emerald-950/80">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                <h3 className="text-lg sm:text-xl font-bold font-serif text-[#F2F5F2] tracking-tight">
+                  Live Telemetry Alerts
+                </h3>
               </div>
               <button
                 type="button"
                 onClick={() => navigate('/dashboard/alerts')}
-                className="text-[14px] text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer font-medium"
+                className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer font-medium"
               >
                 <span>View all</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2.5 min-w-0">
               {recentAlerts.length > 0 ? (
-                recentAlerts.map((a) => (
-                  <div
-                    key={a.id}
-                    className="p-3.5 rounded-lg bg-[#0D1914] border border-emerald-950/80 flex items-start gap-3"
-                  >
+                recentAlerts.map((a) => {
+                  const Icon = a.icon;
+                  return (
                     <div
-                      className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${
-                        a.severity === 'Critical' ? 'bg-red-400 animate-pulse' : 'bg-amber-400'
-                      }`}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[15px] font-semibold text-[#F2F5F2] truncate">{a.title}</span>
-                        <span className="text-[12px] text-[#9CAEA2] shrink-0">{a.time}</span>
+                      key={a.id}
+                      className="p-3 rounded-lg bg-[#0D1914] border border-emerald-950/80 flex items-start gap-2.5 min-w-0"
+                    >
+                      <div className="w-7 h-7 rounded-md bg-[#14251C] border border-emerald-900/60 flex items-center justify-center shrink-0 mt-0.5">
+                        <Icon className="w-3.5 h-3.5 text-emerald-400" />
                       </div>
-                      <p className="text-[14px] text-[#9CAEA2] truncate mt-0.5">{a.location}</p>
-                      <span className="text-[12px] text-emerald-400/80 block mt-1">
-                        Source: {a.source}
-                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span className="text-xs font-semibold text-[#F2F5F2] truncate">{a.title}</span>
+                          <span
+                            className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-bold uppercase shrink-0 ${
+                              a.severity === 'Critical'
+                                ? 'bg-red-950/80 text-red-300 border border-red-800/60'
+                                : 'bg-amber-950/80 text-amber-300 border border-amber-800/60'
+                            }`}
+                          >
+                            {a.severity}
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#9CAEA2] truncate mt-0.5">{a.location}</p>
+                        <div className="flex items-center justify-between text-[11px] text-[#82978B] mt-1 pt-1 border-t border-emerald-950/40">
+                          <span className="truncate">{a.source}</span>
+                          <span className="shrink-0 font-mono text-[10px]">{a.time}</span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
-                <p className="text-[15px] text-[#9CAEA2] py-6 text-center">No high-severity triggers in current telemetry window.</p>
+                <p className="text-xs text-[#9CAEA2] py-6 text-center">No high-severity triggers in current telemetry window.</p>
               )}
             </div>
           </div>
@@ -300,10 +329,10 @@ export const OverviewPage: React.FC = () => {
           <button
             type="button"
             onClick={() => navigate('/dashboard/alerts')}
-            className="w-full mt-2 py-3 rounded-lg bg-[#14251C] hover:bg-[#174C34] text-[15px] sm:text-[16px] font-medium text-emerald-300 border border-emerald-800/60 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full mt-2 py-2.5 rounded-lg bg-[#14251C] hover:bg-[#174C34] text-xs font-semibold text-emerald-300 border border-emerald-800/60 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <span>Manage All Active Environmental Alerts</span>
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>

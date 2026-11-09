@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useDashboardContext } from '@/components/dashboard/DashboardLayout';
-import { Sparkles, RefreshCw, AlertCircle, CheckCircle2, ShieldAlert, MapPin, Info, ArrowRight } from 'lucide-react';
+import { Sparkles, RefreshCw, AlertCircle, CheckCircle2, ShieldAlert, MapPin, ArrowRight } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import type { AiSummary, SelectedPlace } from '@/types';
 
@@ -24,42 +24,42 @@ export const AiBriefPage: React.FC = () => {
 
   const PRESET_PLACES: SelectedPlace[] = [
     {
-      name: 'Delhi NCR Environmental Node',
+      name: 'Delhi NCR',
       lat: 28.6139,
       lon: 77.2090,
       kind: 'point',
       details: ['Indo-Gangetic Basin Particulate Dispersion Center', 'CAMS Atmospheric Model'],
     },
     {
-      name: 'Pune & Western Ghats Foothills',
+      name: 'Pune & Western Ghats',
       lat: 18.5204,
       lon: 73.8567,
       kind: 'point',
       details: ['Deccan Plateau urban-forest interface', 'CAMS live atmospheric feed'],
     },
     {
-      name: 'Mumbai Coastal Air Observatory',
+      name: 'Mumbai Coastal',
       lat: 19.0760,
       lon: 72.8777,
       kind: 'point',
       details: ['Arabian Sea coastal boundary layer', 'Metropolitan emissions corridor'],
     },
     {
-      name: 'Sundarbans Mangrove Delta',
+      name: 'Sundarbans Delta',
       lat: 21.9500,
       lon: 88.8500,
       kind: 'point',
-      details: ['Tidal mangrove forest delta buffer', 'Coastal salinity and cyclone vulnerability'],
+      details: ['Tidal mangrove forest delta buffer', 'Coastal salinity and storm vulnerability'],
     },
     {
-      name: 'Western Ghats · Nilgiri Biosphere',
+      name: 'Western Ghats (Nilgiri)',
       lat: 11.4500,
       lon: 76.6500,
       kind: 'point',
       details: ['UNESCO World Heritage tropical evergreen corridor', 'GFW satellite surveillance AOI'],
     },
     {
-      name: 'Bengaluru Tech & Ecological Hub',
+      name: 'Bengaluru Plateau',
       lat: 12.9716,
       lon: 77.5946,
       kind: 'point',
@@ -96,23 +96,25 @@ export const AiBriefPage: React.FC = () => {
   }, [summary?.summary]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8 min-w-0">
       {/* 1. Header & Target Selector */}
-      <div className="p-5 rounded-xl bg-[#101F18] border border-emerald-950 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-emerald-950/80">
-          <div>
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-emerald-400" />
-              <h2 className="text-base font-bold text-[#F2F5F2]">AI-Synthesized Environmental Risk Brief</h2>
+      <div className="p-4 sm:p-6 rounded-xl bg-[#101F18] border border-emerald-950 shadow-sm space-y-4 min-w-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-emerald-950/80 min-w-0">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <Sparkles className="w-5 h-5 text-emerald-400 shrink-0" />
+              <h2 className="text-lg sm:text-xl font-bold font-serif text-[#F2F5F2] tracking-tight">
+                AI Environmental Intelligence Brief
+              </h2>
             </div>
-            <p className="text-xs text-[#9CAEA2] mt-0.5">
-              Automated Indian environmental risk intelligence briefing grounded in active sensor data (FIRMS fires, CAMS air dispersion, GFW Indian forest AOIs).
+            <p className="text-xs sm:text-sm text-[#9CAEA2]">
+              Real-time environmental synthesis grounded in NASA FIRMS, Copernicus CAMS, and Global Forest Watch.
             </p>
           </div>
 
           {/* Quick presets */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-mono text-[#9CAEA2] mr-1">Presets:</span>
+          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+            <span className="text-xs font-mono text-[#9CAEA2] mr-1">Presets:</span>
             {PRESET_PLACES.map((p) => (
               <button
                 key={p.name}
@@ -121,7 +123,7 @@ export const AiBriefPage: React.FC = () => {
                   setSelectedPlace(p);
                   setSummary(null);
                 }}
-                className={`px-3 py-1.5 rounded-lg text-[14px] font-medium transition-colors cursor-pointer ${
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                   place.name === p.name
                     ? 'bg-[#174C34] text-emerald-300 border border-emerald-600/70 font-semibold'
                     : 'bg-[#14251C] text-[#9CAEA2] hover:text-[#F2F5F2] border border-emerald-900/60'
@@ -134,15 +136,15 @@ export const AiBriefPage: React.FC = () => {
         </div>
 
         {/* Selected target display */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-xl bg-[#0D1914] border border-emerald-950/80">
-          <div className="flex items-start gap-3.5">
-            <div className="w-12 h-12 rounded-xl bg-[#174C34]/50 border border-emerald-600/60 text-emerald-400 flex items-center justify-center shrink-0">
-              <MapPin className="w-6 h-6" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-xl bg-[#0D1914] border border-emerald-950/80 min-w-0">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
+            <div className="w-10 h-10 rounded-xl bg-[#174C34]/50 border border-emerald-600/60 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+              <MapPin className="w-5 h-5" />
             </div>
-            <div>
-              <h3 className="text-[19px] sm:text-[21px] font-bold text-[#F2F5F2]">{place.name}</h3>
-              <p className="text-[14px] text-emerald-400 mt-0.5">
-                {place.lat.toFixed(4)}°N, {place.lon.toFixed(4)}°E · Active 150 km Multi-Sensor Radius
+            <div className="min-w-0 flex-1">
+              <h3 className="text-base sm:text-lg font-bold font-serif text-[#F2F5F2] truncate">{place.name}</h3>
+              <p className="text-xs text-emerald-400 font-mono mt-0.5">
+                {place.lat.toFixed(4)}°N, {place.lon.toFixed(4)}°E · 150 km Multi-Sensor Radius
               </p>
             </div>
           </div>
@@ -151,123 +153,113 @@ export const AiBriefPage: React.FC = () => {
             type="button"
             onClick={handleGenerateBrief}
             disabled={loading}
-            className="py-3.5 px-6 rounded-xl bg-gradient-to-r from-[#174C34] to-[#1F6244] hover:from-[#1F6244] hover:to-[#2E8B57] disabled:opacity-60 text-[16px] font-bold text-[#F2F5F2] border border-emerald-500/60 shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2.5 transition-all cursor-pointer shrink-0"
+            className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-[#174C34] to-[#1F6244] hover:from-[#1F6244] hover:to-[#2E8B57] disabled:opacity-60 text-xs sm:text-sm font-bold text-[#F2F5F2] border border-emerald-500/60 shadow-md shadow-emerald-950/50 flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0"
           >
             {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-emerald-300" />}
-            <span>{loading ? 'Synthesizing Brief…' : summary ? 'Regenerate Analysis' : 'Generate AI Risk Brief'}</span>
+            <span>{loading ? 'Synthesizing Brief…' : summary ? 'Regenerate Brief' : 'Generate AI Risk Brief'}</span>
           </button>
         </div>
       </div>
 
       {/* 2. Error Display */}
       {error && (
-        <div className="p-4 rounded-xl bg-red-950/40 border border-red-900/60 text-[14px] text-red-200 flex items-start gap-2.5">
-          <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+        <div className="p-4 rounded-xl bg-red-950/40 border border-red-900/60 text-xs sm:text-sm text-red-200 flex items-start gap-2.5">
+          <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
           <span>{error}</span>
         </div>
       )}
 
       {/* 3. Structured Environmental Brief Output */}
       {summary ? (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6 min-w-0">
           {/* Metadata pill bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-[#101F18] border border-emerald-950 text-[14px]">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 sm:p-4 rounded-xl bg-[#101F18] border border-emerald-950 text-xs min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5">
               <span
-                className={`px-3 py-1 rounded-lg border font-semibold text-[13px] ${
+                className={`px-2.5 py-1 rounded-md border font-semibold text-xs ${
                   summary.source === 'gemini'
                     ? 'border-emerald-600/60 bg-emerald-950/70 text-emerald-300'
                     : 'border-amber-700/60 bg-amber-950/60 text-amber-300'
                 }`}
               >
-                {summary.source === 'gemini' ? 'Google Gemini 1.5 Synthesis' : 'Rule-Based Offline Fallback'}
+                {summary.source === 'gemini' ? 'Google Gemini Intelligence' : 'Rule-Based Analytical Brief'}
               </span>
               <span className="text-[#9CAEA2]">
-                Telemetry verification: {summary.context.fires.count} active thermal fires within {summary.context.radiusKm} km
+                Active Telemetry: {summary.context.fires.count} thermal detections within {summary.context.radiusKm} km
               </span>
             </div>
 
-            <span className="text-[#A8BCAE]">
-              Generated: {new Date(summary.generatedAt).toLocaleString()}
+            <span className="text-[#82978B] font-mono text-[11px]">
+              Observed: {new Date(summary.generatedAt).toLocaleTimeString()}
             </span>
           </div>
 
           {/* Structured 3-Card Assessment Layout */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 min-w-0">
             {/* 1. Current Situation */}
-            <div className="p-6 rounded-xl bg-[#101F18] border border-emerald-950 shadow-sm space-y-3.5">
-              <div className="flex items-center gap-2.5 pb-2.5 border-b border-emerald-950/80">
-                <ShieldAlert className="w-5 h-5 text-emerald-400" />
-                <h4 className="text-[18px] sm:text-[19px] font-bold text-[#F2F5F2]">1. Current Situation</h4>
+            <div className="p-4 sm:p-5 rounded-xl bg-[#101F18] border border-emerald-950 shadow-sm space-y-3 min-w-0">
+              <div className="flex items-center gap-2 pb-2 border-b border-emerald-950/80">
+                <ShieldAlert className="w-4 h-4 text-emerald-400 shrink-0" />
+                <h4 className="text-sm sm:text-base font-bold font-serif text-[#F2F5F2]">1. Current Situation</h4>
               </div>
-              <p className="text-[15px] sm:text-[16px] text-[#CBDAD0] leading-relaxed">
+              <p className="text-xs sm:text-sm text-[#CBDAD0] leading-relaxed">
                 {parsedSections?.overview || summary.summary}
               </p>
             </div>
 
             {/* 2. Potential Impacts */}
-            <div className="p-6 rounded-xl bg-[#101F18] border border-emerald-950 shadow-sm space-y-3.5">
-              <div className="flex items-center gap-2.5 pb-2.5 border-b border-emerald-950/80">
-                <AlertCircle className="w-5 h-5 text-amber-400" />
-                <h4 className="text-[18px] sm:text-[19px] font-bold text-[#F2F5F2]">2. Potential Impacts</h4>
+            <div className="p-4 sm:p-5 rounded-xl bg-[#101F18] border border-emerald-950 shadow-sm space-y-3 min-w-0">
+              <div className="flex items-center gap-2 pb-2 border-b border-emerald-950/80">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <h4 className="text-sm sm:text-base font-bold font-serif text-[#F2F5F2]">2. Potential Impacts</h4>
               </div>
-              <div className="text-[15px] sm:text-[16px] text-[#CBDAD0] leading-relaxed space-y-2">
+              <div className="text-xs sm:text-sm text-[#CBDAD0] leading-relaxed space-y-2">
                 {parsedSections?.bodyLines && parsedSections.bodyLines.length > 0 ? (
                   parsedSections.bodyLines.map((line, idx) => (
                     <p key={idx}>{line}</p>
                   ))
                 ) : (
                   <p>
-                    Elevated particulate inhalation threat and localized thermal radiative stress on nearby ecosystem buffers.
+                    Particulate inhalation hazard and potential thermal stress on local ecosystems within observation perimeter.
                   </p>
                 )}
               </div>
             </div>
 
             {/* 3. Recommended Actions */}
-            <div className="p-6 rounded-xl bg-[#101F18] border border-emerald-950 shadow-sm space-y-3.5">
-              <div className="flex items-center gap-2.5 pb-2.5 border-b border-emerald-950/80">
-                <CheckCircle2 className="w-5 h-5 text-cyan-400" />
-                <h4 className="text-[18px] sm:text-[19px] font-bold text-[#F2F5F2]">3. Recommended Actions</h4>
+            <div className="p-4 sm:p-5 rounded-xl bg-[#101F18] border border-emerald-950 shadow-sm space-y-3 min-w-0">
+              <div className="flex items-center gap-2 pb-2 border-b border-emerald-950/80">
+                <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
+                <h4 className="text-sm sm:text-base font-bold font-serif text-[#F2F5F2]">3. Recommendations</h4>
               </div>
-              <ul className="text-[15px] sm:text-[16px] text-[#CBDAD0] space-y-2.5 leading-relaxed">
+              <ul className="text-xs sm:text-sm text-[#CBDAD0] space-y-2 leading-relaxed">
                 <li className="flex items-start gap-2">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 mt-2 shrink-0" />
-                  <span>Maintain continuous observation for smoke dispersion trajectories.</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 mt-1.5 shrink-0" />
+                  <span>Maintain continuous observation for atmospheric particulate dispersion.</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 mt-2 shrink-0" />
-                  <span>Notify regional surveillance teams if thermal radiative power exceeds 100 MW.</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 mt-1.5 shrink-0" />
+                  <span>Alert regional monitoring cells if thermal anomalies exceed 80 MW FRP.</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 mt-2 shrink-0" />
-                  <span>Verify critical canopy loss boundaries against seasonal satellite passes.</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 mt-1.5 shrink-0" />
+                  <span>Validate canopy disturbance boundaries against satellite tracking passes.</span>
                 </li>
               </ul>
             </div>
           </div>
         </div>
       ) : (
-        <div className="p-14 rounded-xl bg-[#101F18] border border-dashed border-emerald-950/80 text-center space-y-3">
-          <Sparkles className="w-10 h-10 text-emerald-400/60 mx-auto" />
-          <h3 className="text-[20px] font-bold text-[#F2F5F2]">No Brief Generated Yet</h3>
-          <p className="text-[15px] sm:text-[16px] text-[#9CAEA2] max-w-md mx-auto">
-            Click "Generate AI Risk Brief" to synthesize a real-time environmental analysis for {place.name}.
+        <div className="p-10 sm:p-14 rounded-xl bg-[#101F18] border border-dashed border-emerald-950/80 text-center space-y-2.5">
+          <Sparkles className="w-8 h-8 text-emerald-400/60 mx-auto" />
+          <h3 className="text-base sm:text-lg font-bold font-serif text-[#F2F5F2]">No Brief Generated Yet</h3>
+          <p className="text-xs sm:text-sm text-[#9CAEA2] max-w-md mx-auto">
+            Click "Generate AI Risk Brief" to synthesize real-time environmental analysis for {place.name}.
           </p>
         </div>
       )}
-
-      {/* Provenance and Disclaimer Notice */}
-      <div className="flex items-start gap-3 p-5 rounded-xl bg-[#0D1914] border border-emerald-950/80 text-[14px] sm:text-[15px] text-[#9CAEA2] leading-relaxed">
-        <Info className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-        <div>
-          <span className="font-semibold text-[#F2F5F2]">AI Synthesis Protocol: </span>
-          Briefings use only the verified sensor metrics available on this platform. They do not fabricate unverified weather conditions or future dates. Recommendations are for analytical support and should be verified before executive operational deployment.
-        </div>
-      </div>
     </div>
   );
 };
 
 export default AiBriefPage;
-

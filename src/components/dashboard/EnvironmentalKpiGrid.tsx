@@ -49,7 +49,7 @@ export const EnvironmentalKpiGrid: React.FC<KpiGridProps> = ({
   const riskVariant = riskIndex > 75 ? 'red' : riskIndex > 50 ? 'amber' : riskIndex > 30 ? 'amber' : 'emerald';
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 min-w-0">
       {/* Card 1: Environmental Risk Index */}
       <EnvironmentalKpiCard
         title="Environmental Risk Index"

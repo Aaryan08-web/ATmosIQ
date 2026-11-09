@@ -71,7 +71,7 @@ export const EnvironmentalTrends: React.FC<TrendsProps> = ({
       .sort((a, b) => (b.usAqi ?? 0) - (a.usAqi ?? 0))
       .slice(0, 10)
       .map((p) => ({
-        name: p.name.length > 10 ? p.name.slice(0, 9) + '…' : p.name,
+        name: p.name.length > 9 ? p.name.slice(0, 8) + '…' : p.name,
         fullName: `${p.name}, ${p.state ? `${p.state}, India` : p.country}`,
         usAqi: p.usAqi ?? 0,
         pm25: p.pm25 ?? 0,
@@ -121,18 +121,18 @@ export const EnvironmentalTrends: React.FC<TrendsProps> = ({
   };
 
   return (
-    <div className="rounded-xl bg-[#101F18] border border-emerald-950 p-5 shadow-sm space-y-4">
+    <div className="rounded-xl bg-[#101F18] border border-emerald-950 p-4 sm:p-5 shadow-sm space-y-4 min-w-0">
       {/* Header and Toggle */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-emerald-950/80">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <TrendingUp className="w-5 h-5 text-emerald-400" />
-            <h3 className="text-[20px] sm:text-[22px] font-bold text-[#F2F5F2] tracking-tight">
-              Environmental Telemetry Spectrum &amp; Trends
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-emerald-950/80 min-w-0">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <TrendingUp className="w-5 h-5 text-emerald-400 shrink-0" />
+            <h3 className="text-lg sm:text-xl font-bold font-serif text-[#F2F5F2] tracking-tight">
+              Environmental Trends &amp; Telemetry
             </h3>
           </div>
-          <p className="text-[14px] sm:text-[15px] text-[#9CAEA2] mt-1">
-            Comparative analysis across active observation stations, thermal clusters, and stored historical snapshots.
+          <p className="text-xs sm:text-sm text-[#9CAEA2]">
+            Comparative analysis across active Indian observation points, thermal detections, and historical trends.
           </p>
         </div>
 
@@ -141,38 +141,38 @@ export const EnvironmentalTrends: React.FC<TrendsProps> = ({
           <button
             type="button"
             onClick={() => setMetricTab('air')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-md text-[14px] font-medium transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
               metricTab === 'air'
                 ? 'bg-[#14251C] text-emerald-300 border border-emerald-800/60'
                 : 'text-[#9CAEA2] hover:text-[#F2F5F2]'
             }`}
           >
-            <Wind className="w-4 h-4 text-cyan-400" />
+            <Wind className="w-3.5 h-3.5 text-cyan-400" />
             <span>Air Quality</span>
           </button>
           <button
             type="button"
             onClick={() => setMetricTab('fire')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-md text-[14px] font-medium transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
               metricTab === 'fire'
                 ? 'bg-[#14251C] text-orange-300 border border-emerald-800/60'
                 : 'text-[#9CAEA2] hover:text-[#F2F5F2]'
             }`}
           >
-            <Flame className="w-4 h-4 text-orange-400" />
+            <Flame className="w-3.5 h-3.5 text-orange-400" />
             <span>Thermal FRP</span>
           </button>
           <button
             type="button"
             onClick={() => setMetricTab('history')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-md text-[14px] font-medium transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
               metricTab === 'history'
                 ? 'bg-[#14251C] text-emerald-300 border border-emerald-800/60'
                 : 'text-[#9CAEA2] hover:text-[#F2F5F2]'
             }`}
           >
-            <History className="w-4 h-4 text-emerald-400" />
-            <span>Historical Snapshots</span>
+            <History className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Historical</span>
           </button>
         </div>
       </div>
@@ -229,7 +229,7 @@ export const EnvironmentalTrends: React.FC<TrendsProps> = ({
       )}
 
       {/* Chart Canvas */}
-      <div className="w-full h-72 pt-2">
+      <div className="w-full h-64 sm:h-72 lg:h-80 pt-2 min-w-0">
         {loading || (metricTab === 'history' && loadingHistory) ? (
           <div className="w-full h-full flex items-center justify-center">
             <div className="h-44 w-full rounded bg-emerald-900/10 animate-pulse" />
@@ -237,18 +237,18 @@ export const EnvironmentalTrends: React.FC<TrendsProps> = ({
         ) : metricTab === 'air' ? (
           airChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={airChartData} margin={{ top: 10, right: 10, left: -15, bottom: 25 }}>
+              <BarChart data={airChartData} margin={{ top: 10, right: 10, left: -20, bottom: 30 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#172D22" vertical={false} />
                 <XAxis
                   dataKey="name"
                   stroke="#9CAEA2"
-                  fontSize={12}
+                  fontSize={11}
                   tickLine={false}
                   interval={0}
                   angle={-25}
                   textAnchor="end"
                 />
-                <YAxis stroke="#9CAEA2" fontSize={12} tickLine={false} domain={[0, 'auto']} />
+                <YAxis stroke="#9CAEA2" fontSize={11} tickLine={false} domain={[0, 'auto']} />
                 <Tooltip
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
@@ -422,12 +422,12 @@ export const EnvironmentalTrends: React.FC<TrendsProps> = ({
       </div>
 
       {/* Honest data provenance note */}
-      <div className="flex items-center gap-2 text-[12px] sm:text-[13px] text-[#9CAEA2]/90 pt-2.5 border-t border-emerald-950/60 leading-normal">
-        <Info className="w-4 h-4 text-emerald-400 shrink-0" />
+      <div className="flex items-center gap-2 text-xs text-[#9CAEA2] pt-2.5 border-t border-emerald-950/60 leading-normal">
+        <Info className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
         <span>
           {metricTab === 'history'
-            ? 'Historical records are stored in the local SQLite database (table environmental_snapshots). The application does not synthesize artificial historical values to fill data gaps.'
-            : 'Metrics represent real-time measurements across the 45 world cities (CAMS) and NASA FIRMS 24-hour thermal detections. Switch to "Historical Snapshots" to inspect persistent snapshot telemetry.'}
+            ? 'Historical records are stored locally to track environmental trends across observation cycles.'
+            : 'Observations reflect real-time telemetry across Indian observatories (CAMS) and NASA FIRMS 24-hour thermal detections.'}
         </span>
       </div>
     </div>
