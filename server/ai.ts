@@ -17,6 +17,97 @@ export interface AreaContext {
   deforestation: { name: string; distanceKm: number; driver: string; severity: string }[];
 }
 
+export interface SummariseResult {
+  text: string;
+  source: 'gemini' | 'rule-based';
+  fallback?: boolean;
+  fallbackReason?: 'service_unavailable' | 'timeout' | 'invalid_key' | 'error' | 'no_key';
+  attempts?: number;
+  timing?: {
+    geminiMs: number;
+    backoffMs: number;
+    fallbackMs: number;
+  };
+}
+
+export interface ParsedGeminiError {
+  status: number;
+  message: string;
+  isRetryable: boolean;
+  retryAfterMs?: number;
+}
+
+export interface GeminiRetryOptions {
+  apiKey?: string;
+  model?: string;
+  maxAttempts?: number;
+  baseDelayMs?: number;
+  maxDelayMs?: number;
+  timeoutMs?: number;
+  jitter?: boolean;
+  runner?: (params: { model: string; contents: string; signal?: AbortSignal }) => Promise<{ text?: string | null }>;
+  sleep?: (ms: number) => Promise<void>;
+  logger?: (msg: string) => void;
+}
+
+export interface AiSummaryTiming {
+  dataRetrievalMs: number;
+  geminiMs: number;
+  backoffMs: number;
+  fallbackMs: number;
+  totalMs: number;
+  cached: boolean;
+}
+
+export interface CachedAiSummaryPayload {
+  summary: string;
+  source: 'gemini' | 'rule-based';
+  fallback: boolean;
+  fallbackReason?: string;
+  context: AreaContext;
+  generatedAt: string;
+  cacheKey: string;
+  timing: AiSummaryTiming;
+}
+
+const aiSummaryCacheStore = new Map<string, { value: CachedAiSummaryPayload; expiresAt: number }>();
+
+export function buildAiSummaryCacheKey(params: {
+  lat: number;
+  lon: number;
+  radiusKm?: number;
+  dataFreshness?: string | number;
+  briefType?: string;
+}): string {
+  const normLat = Number(params.lat).toFixed(4);
+  const normLon = Number(params.lon).toFixed(4);
+  const radius = params.radiusKm ?? 150;
+  const type = params.briefType ?? 'standard';
+  const freshness = params.dataFreshness ?? 'default';
+  return `ai-summary:lat=${normLat}:lon=${normLon}:r=${radius}:type=${type}:fresh=${freshness}`;
+}
+
+export function getCachedAiSummary(key: string): CachedAiSummaryPayload | null {
+  const entry = aiSummaryCacheStore.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    aiSummaryCacheStore.delete(key);
+    return null;
+  }
+  return entry.value;
+}
+
+export function setCachedAiSummary(key: string, payload: CachedAiSummaryPayload, ttlMs = 180000): void {
+  aiSummaryCacheStore.set(key, {
+    value: payload,
+    expiresAt: Date.now() + ttlMs,
+  });
+}
+
+export function clearAiSummaryCache(): void {
+  aiSummaryCacheStore.clear();
+}
+
 export async function buildContext(name: string, lat: number, lon: number, radiusKm = 150): Promise<AreaContext> {
   const [fires, aq] = await Promise.all([getFires(1), getAirQuality().catch(() => null)]);
   const aqAvailable = aq !== null;
@@ -55,7 +146,7 @@ export async function buildContext(name: string, lat: number, lon: number, radiu
   };
 }
 
-/** Deterministic fallback so the feature still works without a Gemini key. */
+/** Deterministic fallback so the feature still works without a Gemini key or when Gemini is unavailable. */
 export function ruleBasedSummary(c: AreaContext): string {
   const parts: string[] = [];
   parts.push(
@@ -78,8 +169,273 @@ export function ruleBasedSummary(c: AreaContext): string {
   return parts.join(' ');
 }
 
-export async function summarise(c: AreaContext): Promise<{ text: string; source: 'gemini' | 'rule-based' }> {
-  if (!config.geminiKey) return { text: ruleBasedSummary(c), source: 'rule-based' };
+export function sanitizeErrorDetails(details: string, apiKey?: string): string {
+  let sanitized = details || 'Unknown error';
+  if (apiKey && apiKey.length > 4) {
+    sanitized = sanitized.replaceAll(apiKey, '[REDACTED]');
+  }
+  if (config.geminiKey && config.geminiKey.length > 4) {
+    sanitized = sanitized.replaceAll(config.geminiKey, '[REDACTED]');
+  }
+  sanitized = sanitized.replace(/(key=)[A-Za-z0-9_-]+/gi, '$1[REDACTED]');
+  sanitized = sanitized.replace(/(api[_-]?key[:=]\s*["']?)[A-Za-z0-9_-]+/gi, '$1[REDACTED]');
+  sanitized = sanitized.replace(/AIzaSy[A-Za-z0-9_-]{33}/g, '[REDACTED]');
+  sanitized = sanitized.replace(/(Bearer\s+)[A-Za-z0-9_.-]+/gi, '$1[REDACTED]');
+  if (sanitized.length > 250) {
+    sanitized = sanitized.slice(0, 247) + '...';
+  }
+  return sanitized;
+}
+
+export function parseGeminiError(err: unknown, apiKey?: string): ParsedGeminiError {
+  const errObj = err && typeof err === 'object' ? (err as Record<string, unknown>) : {};
+  const rawMsg = err instanceof Error ? err.message : String(err || '');
+  const sanitizedMsg = sanitizeErrorDetails(rawMsg, apiKey);
+
+  let status = 0;
+  if (typeof errObj.status === 'number' && errObj.status > 0) {
+    status = errObj.status;
+  } else if (typeof errObj.statusCode === 'number' && errObj.statusCode > 0) {
+    status = errObj.statusCode;
+  } else if (typeof (errObj.response as Record<string, unknown> | undefined)?.status === 'number') {
+    status = (errObj.response as Record<string, unknown>).status as number;
+  } else if (typeof errObj.code === 'number' && errObj.code > 0) {
+    status = errObj.code;
+  }
+
+  if (!status) {
+    if (errObj.name === 'AbortError' || errObj.name === 'TimeoutError' || /timed?\s*out/i.test(rawMsg)) {
+      status = 504;
+    } else {
+      const match = rawMsg.match(/\b(503|500|502|504|400|401|403|404|408|429)\b/);
+      if (match) {
+        status = Number(match[1]);
+      } else {
+        status = 500;
+      }
+    }
+  }
+
+  // Extract Retry-After
+  let retryAfterMs: number | undefined;
+  const headers = (errObj.response as Record<string, unknown> | undefined)?.headers as
+    | { get?: (k: string) => string | null }
+    | Record<string, string>
+    | undefined;
+
+  let retryAfterHeader: string | null | undefined;
+  if (headers && typeof (headers as { get?: (k: string) => string | null }).get === 'function') {
+    retryAfterHeader = (headers as { get: (k: string) => string | null }).get('retry-after');
+  } else if (headers && typeof headers === 'object') {
+    retryAfterHeader = (headers as Record<string, string>)['retry-after'];
+  } else if (typeof errObj.retryAfter === 'number' || typeof errObj.retryAfter === 'string') {
+    retryAfterHeader = String(errObj.retryAfter);
+  }
+
+  if (retryAfterHeader) {
+    const sec = parseFloat(retryAfterHeader);
+    if (!isNaN(sec) && sec > 0) {
+      retryAfterMs = Math.round(sec * 1000);
+    } else {
+      const parsedDate = Date.parse(retryAfterHeader);
+      if (!isNaN(parsedDate) && parsedDate > Date.now()) {
+        retryAfterMs = parsedDate - Date.now();
+      }
+    }
+    if (retryAfterMs !== undefined) {
+      retryAfterMs = Math.min(retryAfterMs, 10000);
+    }
+  }
+
+  // Non-retryable conditions:
+  const isKeyError = /API_KEY_INVALID|UNAUTHENTICATED|invalid api key|api key not valid/i.test(rawMsg) || status === 401;
+  const isPermissionError = /PERMISSION_DENIED|permission denied|forbidden/i.test(rawMsg) || status === 403;
+  const isInvalidRequest = /INVALID_ARGUMENT|invalid argument|invalid request/i.test(rawMsg) || status === 400 || status === 422;
+  const isModelNotFound = /NOT_FOUND|model not found|unsupported model|is not supported for/i.test(rawMsg) || status === 404;
+
+  if (isKeyError || isPermissionError || isInvalidRequest || isModelNotFound) {
+    return {
+      status,
+      message: sanitizedMsg,
+      isRetryable: false,
+      retryAfterMs,
+    };
+  }
+
+  // Retryable conditions:
+  const is503 = status === 503 || /503|service unavailable|overloaded/i.test(rawMsg);
+  const isTransient5xx = (status >= 500 && status < 600) || status === 408;
+  const isTimeout =
+    errObj.name === 'AbortError' ||
+    errObj.name === 'TimeoutError' ||
+    /timed?\s*out|econnreset|etimedout|socket hang up|fetch failed/i.test(rawMsg);
+
+  const isRetryable = is503 || isTransient5xx || isTimeout;
+
+  return {
+    status,
+    message: sanitizedMsg,
+    isRetryable,
+    retryAfterMs,
+  };
+}
+
+export function calculateBackoff(
+  attempt: number,
+  retryAfterMs?: number,
+  baseDelayMs = 1000,
+  jitter = true,
+  maxDelayMs = 10000
+): number {
+  if (retryAfterMs !== undefined && retryAfterMs > 0) {
+    return Math.min(retryAfterMs, maxDelayMs);
+  }
+  const base = baseDelayMs * Math.pow(2, attempt - 1);
+  if (!jitter) {
+    return Math.min(base, maxDelayMs);
+  }
+  // Jitter between ~0.8 and ~1.2 (for base=1000: ~1s, ~2s, ~4s)
+  const factor = 0.8 + Math.random() * 0.4;
+  const delay = Math.round(base * factor);
+  return Math.min(Math.max(delay, 1), maxDelayMs);
+}
+
+let lastLoggedError: { key: string; timestamp: number } | null = null;
+const LOG_SUPPRESS_WINDOW_MS = 60000;
+
+export function resetLoggingDeduplicationForTests() {
+  lastLoggedError = null;
+}
+
+export function logConciseError(
+  provider: string,
+  status: number | string,
+  details: string,
+  customLogger?: (msg: string) => void
+) {
+  const errorKey = `${provider}:${status}:${details}`;
+  const now = Date.now();
+  if (lastLoggedError && lastLoggedError.key === errorKey && now - lastLoggedError.timestamp < LOG_SUPPRESS_WINDOW_MS) {
+    return;
+  }
+  lastLoggedError = { key: errorKey, timestamp: now };
+  const line = `[ai] Provider: ${provider} | Status: ${status} | Error: ${details}`;
+  if (customLogger) {
+    customLogger(line);
+  } else {
+    console.error(line);
+  }
+}
+
+export async function callGeminiWithRetry(
+  prompt: string,
+  options: GeminiRetryOptions = {}
+): Promise<{ text: string; attempts: number; geminiMs: number; backoffMs: number }> {
+  const apiKey = options.apiKey || config.geminiKey;
+  if (!apiKey) {
+    throw new Error('No Gemini API key configured.');
+  }
+
+  const model = options.model || config.geminiModel;
+  const maxAttempts = options.maxAttempts ?? 3;
+  const baseDelayMs = options.baseDelayMs ?? 1000;
+  const maxDelayMs = options.maxDelayMs ?? 10000;
+  // Bounded per-attempt timeout (minimum 10s required by Gemini API deadline policy)
+  const timeoutMs = options.timeoutMs ?? 10000;
+  const jitter = options.jitter ?? true;
+  const sleepFn = options.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
+
+  let lastParsedError: ParsedGeminiError | null = null;
+  let totalGeminiMs = 0;
+  let totalBackoffMs = 0;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const controller = new AbortController();
+    let timeoutHandle: NodeJS.Timeout | null = null;
+    const tAttemptStart = performance.now();
+
+    try {
+      const runnerPromise = options.runner
+        ? options.runner({ model, contents: prompt, signal: controller.signal })
+        : (async () => {
+            // SDK timeout cancellation aborts the underlying HTTP request via httpOptions
+            const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: timeoutMs } });
+            return ai.models.generateContent({ model, contents: prompt });
+          })();
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          controller.abort();
+          const err = new Error(`Gemini request timed out after ${timeoutMs}ms`);
+          err.name = 'TimeoutError';
+          (err as unknown as { status: number }).status = 504;
+          reject(err);
+        }, timeoutMs);
+      });
+
+      const resp = await Promise.race([runnerPromise, timeoutPromise]);
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      totalGeminiMs += Math.round(performance.now() - tAttemptStart);
+
+      const text = resp?.text?.trim();
+      if (!text) {
+        throw new Error('Gemini returned an empty response.');
+      }
+
+      return { text, attempts: attempt, geminiMs: totalGeminiMs, backoffMs: totalBackoffMs };
+    } catch (rawErr) {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      totalGeminiMs += Math.round(performance.now() - tAttemptStart);
+      const parsed = parseGeminiError(rawErr, apiKey);
+      lastParsedError = parsed;
+
+      // Do NOT retry non-retryable errors or if maximum attempts reached
+      if (!parsed.isRetryable || attempt >= maxAttempts) {
+        break;
+      }
+
+      // Exponential backoff with jitter or Retry-After
+      const delay = calculateBackoff(attempt, parsed.retryAfterMs, baseDelayMs, jitter, maxDelayMs);
+      const tBackoffStart = performance.now();
+      await sleepFn(delay);
+      totalBackoffMs += Math.round(performance.now() - tBackoffStart);
+    }
+  }
+
+  // Log one concise error after retries are exhausted (or non-retryable error encountered)
+  const finalStatus = lastParsedError?.status || 503;
+  const finalMessage = lastParsedError?.message || 'Gemini service unavailable after retries.';
+  logConciseError('gemini', finalStatus, finalMessage, options.logger);
+
+  const finalError = new Error(finalMessage) as Error & {
+    status: number;
+    isRetryable: boolean;
+    geminiMs: number;
+    backoffMs: number;
+  };
+  finalError.status = finalStatus;
+  finalError.isRetryable = !!lastParsedError?.isRetryable;
+  finalError.geminiMs = totalGeminiMs;
+  finalError.backoffMs = totalBackoffMs;
+  throw finalError;
+}
+
+export async function summarise(
+  c: AreaContext,
+  options?: GeminiRetryOptions
+): Promise<SummariseResult> {
+  const effectiveKey = options?.apiKey ?? config.geminiKey;
+  if (!effectiveKey) {
+    const tFallbackStart = performance.now();
+    const text = ruleBasedSummary(c);
+    const fallbackMs = Math.round(performance.now() - tFallbackStart);
+    return {
+      text,
+      source: 'rule-based',
+      fallback: false,
+      timing: { geminiMs: 0, backoffMs: 0, fallbackMs },
+    };
+  }
 
   const prompt = [
     'You are the senior environmental intelligence officer for ATmosIQ, focusing exclusively on the Republic of India.',
@@ -94,13 +450,45 @@ export async function summarise(c: AreaContext): Promise<{ text: string; source:
   ].join('\n');
 
   try {
-    const ai = new GoogleGenAI({ apiKey: config.geminiKey });
-    const resp = await ai.models.generateContent({ model: config.geminiModel, contents: prompt });
-    const text = resp.text?.trim();
-    if (!text) throw new Error('empty response');
-    return { text, source: 'gemini' };
+    const res = await callGeminiWithRetry(prompt, {
+      ...options,
+      apiKey: effectiveKey,
+      model: options?.model ?? config.geminiModel,
+    });
+    return {
+      text: res.text,
+      source: 'gemini',
+      attempts: res.attempts,
+      timing: {
+        geminiMs: res.geminiMs,
+        backoffMs: res.backoffMs,
+        fallbackMs: 0,
+      },
+    };
   } catch (err) {
-    console.error('[ai] Gemini failed, using rule-based summary:', err instanceof Error ? err.message : err);
-    return { text: ruleBasedSummary(c), source: 'rule-based' };
+    const tFallbackStart = performance.now();
+    const text = ruleBasedSummary(c);
+    const fallbackMs = Math.round(performance.now() - tFallbackStart);
+    const parsed = parseGeminiError(err, effectiveKey);
+    const fallbackReason: SummariseResult['fallbackReason'] =
+      parsed.status === 503
+        ? 'service_unavailable'
+        : parsed.status === 504
+          ? 'timeout'
+          : parsed.status === 401
+            ? 'invalid_key'
+            : 'error';
+
+    return {
+      text,
+      source: 'rule-based',
+      fallback: true,
+      fallbackReason,
+      timing: {
+        geminiMs: (err as { geminiMs?: number })?.geminiMs ?? 0,
+        backoffMs: (err as { backoffMs?: number })?.backoffMs ?? 0,
+        fallbackMs,
+      },
+    };
   }
 }

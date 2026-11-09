@@ -166,10 +166,23 @@ export interface Overview {
     status?: string;
   };
 }
+export interface AiSummaryTiming {
+  dataRetrievalMs: number;
+  geminiMs: number;
+  backoffMs: number;
+  fallbackMs: number;
+  totalMs: number;
+  cached: boolean;
+}
+
 export interface AiSummary {
   summary: string;
   source: 'gemini' | 'rule-based';
+  fallback?: boolean;
+  fallbackReason?: string;
   generatedAt: string;
   context: { fires: { count: number; totalFrp: number; maxFrp: number; live: boolean }; radiusKm: number };
+  timing?: AiSummaryTiming;
+  cacheKey?: string;
 }
 export interface SelectedPlace { name: string; lat: number; lon: number; kind: 'fire' | 'air' | 'forest' | 'point'; details: string[]; }

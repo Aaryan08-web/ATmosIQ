@@ -1,14 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { useDashboardContext } from '@/components/dashboard/DashboardLayout';
-import { Sparkles, RefreshCw, AlertCircle, CheckCircle2, ShieldAlert, MapPin, ArrowRight } from 'lucide-react';
+import { Sparkles, RefreshCw, AlertCircle, CheckCircle2, ShieldAlert, MapPin } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import type { AiSummary, SelectedPlace } from '@/types';
 
-export const AiBriefPage: React.FC = () => {
-  const { selectedPlace, setSelectedPlace } = useDashboardContext();
-  const [summary, setSummary] = useState<AiSummary | null>(null);
+export interface AiBriefPageProps {
+  initialSummary?: AiSummary | null;
+  initialPlace?: SelectedPlace;
+}
+
+export const AiBriefPage: React.FC<AiBriefPageProps> = ({ initialSummary = null, initialPlace }) => {
+  const dashboardContext = useDashboardContext();
+  const selectedPlace = initialPlace ?? dashboardContext?.selectedPlace;
+  const setSelectedPlace = dashboardContext?.setSelectedPlace ?? (() => {});
+
+  const [summary, setSummary] = useState<AiSummary | null>(initialSummary);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // In-flight guard to prevent duplicate rapid requests caused by repeated rendering or state changes
+  const inFlightRef = useRef(false);
 
   const place: SelectedPlace = selectedPlace || {
     name: 'Delhi NCR Central Environmental Observatory',
@@ -67,7 +78,9 @@ export const AiBriefPage: React.FC = () => {
     },
   ];
 
-  const handleGenerateBrief = async () => {
+  const handleGenerateBrief = useCallback(async () => {
+    if (loading || inFlightRef.current) return;
+    inFlightRef.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -76,24 +89,27 @@ export const AiBriefPage: React.FC = () => {
         json: { name: place.name, lat: place.lat, lon: place.lon },
       });
       setSummary(res);
-    } catch (e) {
+    } catch (e: unknown) {
       setError(e instanceof ApiError ? e.message : 'Could not generate environmental brief at this time.');
     } finally {
       setLoading(false);
+      inFlightRef.current = false;
     }
-  };
+  }, [loading, place.name, place.lat, place.lon]);
 
   // Parse synthesized brief into structured sections
-  const parsedSections = React.useMemo(() => {
+  const parsedSections = useMemo(() => {
     if (!summary?.summary) return null;
     const text = summary.summary;
-    const lines = text.split('\n').filter((l) => l.trim().length > 0);
+    const lines = text.split('\n').filter((l: string) => l.trim().length > 0);
 
     return {
       overview: lines[0] || text,
       bodyLines: lines.slice(1),
     };
   }, [summary?.summary]);
+
+  const isFallbackActive = !!summary && (summary.fallback || (summary.source === 'rule-based' && summary.fallbackReason !== undefined));
 
   return (
     <div className="space-y-6 sm:space-y-8 min-w-0">
@@ -122,6 +138,7 @@ export const AiBriefPage: React.FC = () => {
                 onClick={() => {
                   setSelectedPlace(p);
                   setSummary(null);
+                  setError(null);
                 }}
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                   place.name === p.name
@@ -161,15 +178,39 @@ export const AiBriefPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Error Display */}
-      {error && (
+      {/* 2. Error Display (only if no usable summary exists) */}
+      {!summary && error && (
         <div className="p-4 rounded-xl bg-red-950/40 border border-red-900/60 text-xs sm:text-sm text-red-200 flex items-start gap-2.5">
           <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* 3. Structured Environmental Brief Output */}
+      {/* 3. Small, Unobtrusive Fallback Notice when AI service is unavailable */}
+      {isFallbackActive && (
+        <div
+          data-testid="ai-fallback-notice"
+          className="p-3.5 sm:p-4 rounded-xl bg-amber-950/40 border border-amber-900/60 text-xs sm:text-sm text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm min-w-0"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="leading-snug">
+              AI service temporarily unavailable. Showing an environmental analysis based on available data.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleGenerateBrief}
+            disabled={loading}
+            className="px-3 py-1.5 rounded-lg bg-amber-900/60 hover:bg-amber-800/80 text-amber-100 border border-amber-700/60 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shrink-0 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-amber-300 ${loading ? 'animate-spin' : ''}`} />
+            <span>Retry AI Brief</span>
+          </button>
+        </div>
+      )}
+
+      {/* 4. Structured Environmental Brief Output */}
       {summary ? (
         <div className="space-y-4 sm:space-y-6 min-w-0">
           {/* Metadata pill bar */}
@@ -182,7 +223,11 @@ export const AiBriefPage: React.FC = () => {
                     : 'border-amber-700/60 bg-amber-950/60 text-amber-300'
                 }`}
               >
-                {summary.source === 'gemini' ? 'Google Gemini Intelligence' : 'Rule-Based Analytical Brief'}
+                {summary.source === 'gemini'
+                  ? 'Google Gemini Intelligence'
+                  : summary.fallback
+                    ? 'Rule-Based Analytical Brief (Fallback)'
+                    : 'Rule-Based Analytical Brief'}
               </span>
               <span className="text-[#9CAEA2]">
                 Active Telemetry: {summary.context.fires.count} thermal detections within {summary.context.radiusKm} km
@@ -215,7 +260,7 @@ export const AiBriefPage: React.FC = () => {
               </div>
               <div className="text-xs sm:text-sm text-[#CBDAD0] leading-relaxed space-y-2">
                 {parsedSections?.bodyLines && parsedSections.bodyLines.length > 0 ? (
-                  parsedSections.bodyLines.map((line, idx) => (
+                  parsedSections.bodyLines.map((line: string, idx: number) => (
                     <p key={idx}>{line}</p>
                   ))
                 ) : (

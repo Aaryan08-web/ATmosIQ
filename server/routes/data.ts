@@ -6,7 +6,16 @@ import { getFires } from '../data/fires.js';
 import { getAirQuality, getAirQualityPoint } from '../data/airQuality.js';
 import { getDeforestation } from '../data/deforestation.js';
 import { getGfwForestAlerts, getGfwSyncStatus, syncGfwAlerts } from '../data/gfwIngestion.js';
-import { buildContext, summarise } from '../ai.js';
+import {
+  buildContext,
+  summarise,
+  buildAiSummaryCacheKey,
+  getCachedAiSummary,
+  setCachedAiSummary,
+  sanitizeErrorDetails,
+  type AiSummaryTiming,
+  type CachedAiSummaryPayload,
+} from '../ai.js';
 import { requireAuth } from './auth.js';
 import { db, type EnvironmentalAlertRow, type EnvironmentalSnapshotRow, type GfwForestAlertRow } from '../db.js';
 import { validateIndiaCoordinate, isPointInIndia } from '../data/geo.js';
@@ -303,6 +312,9 @@ const summarySchema = z.object({
   name: z.string().trim().min(1).max(120),
   lat: z.number().min(-90).max(90),
   lon: z.number().min(-180).max(180),
+  radiusKm: z.number().min(10).max(500).optional(),
+  briefType: z.enum(['standard', 'detailed', 'risk']).optional(),
+  bypassCache: z.boolean().optional(),
 });
 
 const aiLimiter = rateLimit({
@@ -314,6 +326,7 @@ const aiLimiter = rateLimit({
 });
 
 dataRouter.post('/ai/summary', requireAuth, aiLimiter, async (req, res) => {
+  const tStart = performance.now();
   const parsed = summarySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: 'Provide a name, lat and lon.' });
@@ -325,10 +338,90 @@ dataRouter.post('/ai/summary', requireAuth, aiLimiter, async (req, res) => {
     });
     return;
   }
+
+  const radiusKm = parsed.data.radiusKm ?? 150;
+  const briefType = parsed.data.briefType ?? 'standard';
+  const dataFreshnessToken = Math.floor(Date.now() / (3 * 60 * 1000)); // 3-minute freshness window
+
+  const cacheKey = buildAiSummaryCacheKey({
+    lat: parsed.data.lat,
+    lon: parsed.data.lon,
+    radiusKm,
+    dataFreshness: dataFreshnessToken,
+    briefType,
+  });
+
+  if (!parsed.data.bypassCache) {
+    const cached = getCachedAiSummary(cacheKey);
+    if (cached) {
+      const totalMs = Math.round(performance.now() - tStart);
+      const timing: AiSummaryTiming = {
+        dataRetrievalMs: 0,
+        geminiMs: 0,
+        backoffMs: 0,
+        fallbackMs: 0,
+        totalMs,
+        cached: true,
+      };
+
+      console.log(
+        `[ai-perf] Location: "${sanitizeErrorDetails(parsed.data.name)}" | Total: ${totalMs}ms | Data: 0ms | Gemini: 0ms | Backoff: 0ms | Fallback: 0ms | Source: ${cached.source} | Cached: true`
+      );
+
+      res.setHeader('Server-Timing', `total;dur=${totalMs}, cached;dur=1`);
+      res.json({
+        summary: cached.summary,
+        source: cached.source,
+        fallback: cached.fallback,
+        fallbackReason: cached.fallbackReason,
+        context: cached.context,
+        generatedAt: cached.generatedAt,
+        timing,
+        cacheKey,
+      });
+      return;
+    }
+  }
+
   try {
-    const ctx = await buildContext(parsed.data.name, parsed.data.lat, parsed.data.lon);
+    const tRetrievalStart = performance.now();
+    const ctx = await buildContext(parsed.data.name, parsed.data.lat, parsed.data.lon, radiusKm);
+    const dataRetrievalMs = Math.round(performance.now() - tRetrievalStart);
+
     const out = await summarise(ctx);
-    res.json({ summary: out.text, source: out.source, context: ctx, generatedAt: new Date().toISOString() });
+    const totalMs = Math.round(performance.now() - tStart);
+
+    const timing: AiSummaryTiming = {
+      dataRetrievalMs,
+      geminiMs: out.timing?.geminiMs ?? 0,
+      backoffMs: out.timing?.backoffMs ?? 0,
+      fallbackMs: out.timing?.fallbackMs ?? 0,
+      totalMs,
+      cached: false,
+    };
+
+    console.log(
+      `[ai-perf] Location: "${sanitizeErrorDetails(parsed.data.name)}" | Total: ${totalMs}ms | Data: ${dataRetrievalMs}ms | Gemini: ${timing.geminiMs}ms | Backoff: ${timing.backoffMs}ms | Fallback: ${timing.fallbackMs}ms | Source: ${out.source} | Cached: false`
+    );
+
+    res.setHeader(
+      'Server-Timing',
+      `total;dur=${totalMs}, data;dur=${dataRetrievalMs}, gemini;dur=${timing.geminiMs}, backoff;dur=${timing.backoffMs}, fallback;dur=${timing.fallbackMs}`
+    );
+
+    const responsePayload: CachedAiSummaryPayload = {
+      summary: out.text,
+      source: out.source,
+      fallback: !!out.fallback,
+      fallbackReason: out.fallbackReason,
+      context: ctx,
+      generatedAt: new Date().toISOString(),
+      cacheKey,
+      timing,
+    };
+
+    setCachedAiSummary(cacheKey, responsePayload);
+    res.json(responsePayload);
   } catch (err) {
     console.error('[ai]', err instanceof Error ? err.message : err);
     res.status(502).json({ error: 'Could not build the summary right now.' });
