@@ -24,8 +24,8 @@ export function createApp() {
         useDefaults: true,
         directives: {
           'upgrade-insecure-requests': null, // app may be served over plain HTTP on a bare EC2 instance
-          'img-src': ["'self'", 'data:', 'blob:', 'https://*.basemaps.cartocdn.com', 'https://*.tile.openstreetmap.org', 'https://*.arcgisonline.com', 'https://raw.githubusercontent.com', 'https://cdn.jsdelivr.net', 'https://cdn.21st.dev', 'https://www.gstatic.com', 'https://images.unsplash.com'],
-          'connect-src': ["'self'", 'data:', 'blob:', 'https://*.basemaps.cartocdn.com', 'https://*.tile.openstreetmap.org', 'https://*.arcgisonline.com', 'https://nominatim.openstreetmap.org', 'https://cdn.jsdelivr.net', 'https://www.gstatic.com', 'https://cdn.21st.dev'],
+          'img-src': ["'self'", 'data:', 'blob:', 'https://*.basemaps.cartocdn.com', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.org', 'https://*.arcgisonline.com', 'https://server.arcgisonline.com', 'https://raw.githubusercontent.com', 'https://cdn.jsdelivr.net', 'https://cdn.21st.dev', 'https://www.gstatic.com', 'https://images.unsplash.com'],
+          'connect-src': ["'self'", 'data:', 'blob:', 'https://*.basemaps.cartocdn.com', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.org', 'https://*.arcgisonline.com', 'https://server.arcgisonline.com', 'https://nominatim.openstreetmap.org', 'https://cdn.jsdelivr.net', 'https://www.gstatic.com', 'https://cdn.21st.dev'],
           'worker-src': ["'self'", 'blob:', 'data:'],
           'child-src': ["'self'", 'blob:'],
           'font-src': ["'self'", 'data:', 'https://fonts.gstatic.com', 'https://cdn.21st.dev'],

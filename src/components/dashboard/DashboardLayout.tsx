@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Outlet, useNavigate, useOutletContext } from 'react-router-dom';
 import { useAuth } from '@/app/AuthContext';
 import { useApi } from '@/lib/useApi';
@@ -26,10 +26,10 @@ export const DashboardLayout: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  // Sidebar collapse state (defaults to true so hover expansion behaves smoothly from compact mode)
+  // Sidebar collapse state (saved in localStorage, defaults to false on desktop for immediate visibility)
   const [collapsed, setCollapsed] = useState(() => {
     const saved = localStorage.getItem('atmq_sidebar_collapsed');
-    return saved !== null ? saved === 'true' : true;
+    return saved !== null ? saved === 'true' : false;
   });
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -60,13 +60,21 @@ export const DashboardLayout: React.FC = () => {
     forest.retry();
   };
 
-  const handleToggleCollapse = () => {
+  const handleToggleCollapse = useCallback(() => {
     setCollapsed((prev) => {
       const next = !prev;
       localStorage.setItem('atmq_sidebar_collapsed', String(next));
       return next;
     });
-  };
+  }, []);
+
+  const handleCloseMobile = useCallback(() => {
+    setMobileOpen(false);
+  }, []);
+
+  const handleOpenMobile = useCallback(() => {
+    setMobileOpen(true);
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -102,14 +110,16 @@ export const DashboardLayout: React.FC = () => {
         collapsed={collapsed}
         onToggleCollapse={handleToggleCollapse}
         mobileOpen={mobileOpen}
-        onCloseMobile={() => setMobileOpen(false)}
+        onCloseMobile={handleCloseMobile}
       />
 
       {/* Main Application Area */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen overflow-x-hidden">
         <DashboardHeader
           user={user}
-          onOpenMobileSidebar={() => setMobileOpen(true)}
+          onOpenMobileSidebar={handleOpenMobile}
+          onToggleCollapse={handleToggleCollapse}
+          collapsed={collapsed}
           activeAlertCount={activeAlertCount}
         />
 

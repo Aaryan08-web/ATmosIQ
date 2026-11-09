@@ -14,12 +14,16 @@ import type { User } from '@/types';
 interface HeaderProps {
   user: User;
   onOpenMobileSidebar: () => void;
+  onToggleCollapse?: () => void;
+  collapsed?: boolean;
   activeAlertCount?: number;
 }
 
 export const DashboardHeader: React.FC<HeaderProps> = ({
   user,
   onOpenMobileSidebar,
+  onToggleCollapse,
+  collapsed = false,
   activeAlertCount = 0,
 }) => {
 
@@ -79,13 +83,20 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
 
   return (
     <header className="h-16 px-3 sm:px-6 bg-[#0D1914]/90 backdrop-blur-md border-b border-emerald-950/80 sticky top-0 z-20 flex items-center justify-between gap-3 sm:gap-4">
-      {/* Left: Mobile Toggle & Breadcrumb / Title */}
+      {/* Left: Mobile/Desktop Toggle & Breadcrumb / Title */}
       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
         <button
           type="button"
-          onClick={onOpenMobileSidebar}
-          className="p-2 -ml-1 text-[#9CAEA2] hover:text-[#F2F5F2] hover:bg-[#14251C] rounded-lg md:hidden shrink-0 border border-emerald-950/80 min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer transition-colors"
-          aria-label="Open navigation menu"
+          onClick={() => {
+            if (typeof window !== 'undefined' && window.innerWidth < 768) {
+              onOpenMobileSidebar();
+            } else if (onToggleCollapse) {
+              onToggleCollapse();
+            }
+          }}
+          className="p-2 -ml-1 text-[#9CAEA2] hover:text-[#F2F5F2] hover:bg-[#14251C] rounded-lg shrink-0 border border-emerald-950/80 min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer transition-colors"
+          aria-label={collapsed ? "Expand sidebar navigation" : "Collapse sidebar navigation"}
+          title={collapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)"}
         >
           <Menu className="w-5 h-5" />
         </button>

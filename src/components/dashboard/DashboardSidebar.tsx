@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
@@ -14,6 +14,8 @@ import {
   X,
   Leaf,
   ShieldCheck,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import type { User } from '@/types';
 
@@ -79,12 +81,12 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
 }) => {
   const location = useLocation();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
 
   const prefersReducedMotion = useReducedMotion();
   const animationTransition = prefersReducedMotion
     ? { duration: 0.01 }
-    : { duration: 0.3, ease: 'easeInOut' as const };
+    : { duration: 0.25, ease: 'easeInOut' as const };
 
   const navSections = React.useMemo(() => {
     if (user.role === 'admin') {
@@ -103,14 +105,46 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
     return NAV_SECTIONS;
   }, [user.role]);
 
-  // In desktop mode: expanded if either not pinned-collapsed OR actively hovered
-  const isDesktopExpanded = !collapsed || isHovered;
+  // In desktop mode: expanded if not collapsed
+  const isDesktopExpanded = !collapsed;
 
-  // Close mobile drawer and profile popover on route change
+  // Close mobile drawer and profile popover ONLY when route actually changes
+  const prevPathname = useRef(location.pathname);
   useEffect(() => {
-    onCloseMobile();
-    setShowProfileMenu(false);
+    if (prevPathname.current !== location.pathname) {
+      prevPathname.current = location.pathname;
+      onCloseMobile();
+      setShowProfileMenu(false);
+    }
   }, [location.pathname, onCloseMobile]);
+
+  // Close profile menu on outside click
+  useEffect(() => {
+    if (!showProfileMenu) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [showProfileMenu]);
+
+  // Keyboard accessibility: Escape closes mobile drawer and menus; Ctrl+B toggles sidebar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (mobileOpen) onCloseMobile();
+        if (showProfileMenu) setShowProfileMenu(false);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        onToggleCollapse();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileOpen, showProfileMenu, onCloseMobile, onToggleCollapse]);
 
   // Lock background scroll when mobile drawer is open
   useEffect(() => {
@@ -124,14 +158,14 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
     };
   }, [mobileOpen]);
 
-  const renderSidebarContent = (isExpanded: boolean) => (
+  const renderSidebarContent = (isExpanded: boolean, isMobile = false) => (
     <div className="flex flex-col h-full bg-[#0D1914] border-r border-emerald-950/80 text-[#F2F5F2] select-none">
-      {/* Header / Brand Row with animated Logo */}
+      {/* Header / Brand Row with animated Logo & Toggle */}
       <div className="h-20 flex items-center justify-between px-3.5 border-b border-emerald-950/80 shrink-0">
         <NavLink
           to="/dashboard"
           onClick={() => {
-            if (collapsed) onToggleCollapse();
+            if (isMobile) onCloseMobile();
           }}
           className="flex items-center gap-3 overflow-hidden group focus:outline-none cursor-pointer"
           title="ATmosIQ Environmental Intelligence"
@@ -141,7 +175,7 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
             <Leaf className="w-5 h-5 text-emerald-400 fill-emerald-500/40 -rotate-12 transition-transform duration-300 group-hover:scale-110" />
           </div>
 
-          {/* Full Product Name (slides and fades smoothly in expanded mode) */}
+          {/* Full Product Name */}
           <AnimatePresence>
             {isExpanded && (
               <motion.div
@@ -161,14 +195,29 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
         </NavLink>
 
         {/* Mobile Close Button */}
-        <button
-          type="button"
-          onClick={onCloseMobile}
-          className="flex md:hidden items-center justify-center w-9 h-9 min-h-[36px] min-w-[36px] rounded-lg text-[#9CAEA2] hover:text-[#F2F5F2] hover:bg-[#14251C] transition-colors cursor-pointer"
-          aria-label="Close menu"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        {isMobile && (
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            className="flex md:hidden items-center justify-center w-9 h-9 min-h-[36px] min-w-[36px] rounded-lg text-[#9CAEA2] hover:text-[#F2F5F2] hover:bg-[#14251C] transition-colors cursor-pointer border border-emerald-950"
+            aria-label="Close menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
+
+        {/* Desktop Collapse/Expand Toggle Button (visible when expanded) */}
+        {!isMobile && isExpanded && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="hidden md:flex items-center justify-center w-8 h-8 rounded-lg text-[#9CAEA2] hover:text-[#F2F5F2] hover:bg-[#14251C] transition-colors cursor-pointer border border-transparent hover:border-emerald-900/60"
+            aria-label="Collapse sidebar navigation"
+            title="Collapse sidebar (Ctrl+B)"
+          >
+            <ChevronLeft className="w-4 h-4 text-emerald-400" />
+          </button>
+        )}
       </div>
 
       {/* Navigation Sections Area with smooth scroll */}
@@ -214,6 +263,9 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
                 <NavLink
                   key={item.path}
                   to={item.path}
+                  onClick={() => {
+                    if (isMobile) onCloseMobile();
+                  }}
                   title={!isExpanded ? item.title : undefined}
                   className={`group relative rounded-xl text-[14px] font-medium transition-all duration-200 cursor-pointer flex items-center ${
                     isExpanded
@@ -283,7 +335,7 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
       </nav>
 
       {/* Footer / Profile Section fixed at bottom */}
-      <div className="p-3 border-t border-emerald-950/80 relative shrink-0 mt-auto">
+      <div className="p-3 border-t border-emerald-950/80 relative shrink-0 mt-auto" ref={profileMenuRef}>
         <div
           onClick={() => setShowProfileMenu((prev) => !prev)}
           className={`flex items-center gap-2.5 p-2 rounded-xl cursor-pointer hover:bg-[#14251C] transition-all duration-200 border border-transparent hover:border-emerald-900/60 ${
@@ -372,7 +424,10 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
 
             <NavLink
               to="/dashboard/settings"
-              onClick={() => setShowProfileMenu(false)}
+              onClick={() => {
+                setShowProfileMenu(false);
+                if (isMobile) onCloseMobile();
+              }}
               className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[#9CAEA2] hover:text-[#F2F5F2] hover:bg-[#14251C] transition-colors"
             >
               <Settings className="w-4 h-4 text-emerald-400" />
@@ -383,6 +438,7 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
               type="button"
               onClick={() => {
                 setShowProfileMenu(false);
+                if (isMobile) onCloseMobile();
                 onLogout();
               }}
               className="w-full flex items-center gap-2 px-2 py-1.5 mt-1 rounded-lg text-red-300 hover:text-red-200 hover:bg-red-950/40 text-left transition-colors cursor-pointer"
@@ -398,24 +454,18 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Desktop Persistent Sidebar with Framer Motion animated width */}
+      {/* Desktop Persistent Sidebar */}
       <motion.aside
         animate={{ width: isDesktopExpanded ? 260 : 76 }}
         transition={animationTransition}
-        onMouseEnter={() => {
-          if (collapsed) setIsHovered(true);
-        }}
-        onMouseLeave={() => {
-          if (collapsed) setIsHovered(false);
-        }}
         className="hidden md:block shrink-0 relative z-30 select-none"
       >
         <motion.div
           animate={{ width: isDesktopExpanded ? 260 : 76 }}
           transition={animationTransition}
-          className="fixed top-0 bottom-0 left-0 h-screen z-30 overflow-hidden"
+          className="fixed top-0 bottom-0 left-0 h-screen h-[100dvh] z-30 overflow-hidden"
         >
-          {renderSidebarContent(isDesktopExpanded)}
+          {renderSidebarContent(isDesktopExpanded, false)}
         </motion.div>
       </motion.aside>
 
@@ -429,7 +479,7 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={animationTransition}
-              className="fixed inset-0 bg-black/75 backdrop-blur-sm z-40 md:hidden"
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden"
               onClick={onCloseMobile}
               aria-hidden="true"
             />
@@ -439,9 +489,9 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={animationTransition}
-              className="fixed top-0 bottom-0 left-0 w-[260px] max-w-[85vw] z-50 md:hidden bg-[#0D1914] border-r border-emerald-950 shadow-2xl overflow-hidden"
+              className="fixed top-0 bottom-0 left-0 w-[260px] max-w-[85vw] h-screen h-[100dvh] z-50 md:hidden bg-[#0D1914] border-r border-emerald-950 shadow-2xl overflow-hidden"
             >
-              {renderSidebarContent(true)}
+              {renderSidebarContent(true, true)}
             </motion.aside>
           </>
         )}

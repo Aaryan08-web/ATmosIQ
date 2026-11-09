@@ -490,14 +490,19 @@ export async function summarise(
     const text = ruleBasedSummary(c);
     const fallbackMs = Math.round(performance.now() - tFallbackStart);
     const parsed = parseGeminiError(err, effectiveKey);
-    const fallbackReason: SummariseResult['fallbackReason'] =
-      parsed.status === 503
+    const isKeyErr =
+      /API_KEY_INVALID|UNAUTHENTICATED|invalid api key|api key not valid/i.test(parsed.message) ||
+      parsed.status === 401;
+    const isTimeout = parsed.status === 504 || /timed?\s*out/i.test(parsed.message);
+    const is503 = parsed.status === 503 || /503|service unavailable/i.test(parsed.message);
+
+    const fallbackReason: SummariseResult['fallbackReason'] = isKeyErr
+      ? 'invalid_key'
+      : is503
         ? 'service_unavailable'
-        : parsed.status === 504
+        : isTimeout
           ? 'timeout'
-          : parsed.status === 401
-            ? 'invalid_key'
-            : 'error';
+          : 'error';
 
     return {
       text,

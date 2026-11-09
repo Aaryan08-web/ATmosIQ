@@ -143,21 +143,26 @@ export const resolveColorName = (color?: string, category?: string): string => {
   return "blue";
 };
 
-// Custom marker icons
+// Custom marker icons with singleton instance caching to eliminate garbage collection stutters
+const iconCache = new Map<string, L.Icon>();
+
 export const createCustomIcon = (
   color = "blue",
   size: "small" | "medium" | "large" = "medium",
   category?: string
 ) => {
+  const actualColor = resolveColorName(color, category);
+  const cacheKey = `${actualColor}:${size}`;
+  const cached = iconCache.get(cacheKey);
+  if (cached) return cached;
+
   const sizes: Record<"small" | "medium" | "large", [number, number]> = {
     small: [20, 32],
     medium: [25, 41],
     large: [30, 50],
   };
 
-  const actualColor = resolveColorName(color, category);
-
-  return new L.Icon({
+  const icon = new L.Icon({
     iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${actualColor}.png`,
     shadowUrl:
       "https://cdn.21st.dev/assets/mirror/26/264f5c640339f042dd729062cfc04c17f8ea0f29882b538e3848ed8f10edb4da.png",
@@ -166,6 +171,9 @@ export const createCustomIcon = (
     popupAnchor: [1, -34],
     shadowSize: [41, 41],
   });
+
+  iconCache.set(cacheKey, icon);
+  return icon;
 };
 
 // Map event handler component
@@ -191,33 +199,58 @@ const MapFlyTo: React.FC<{ location?: [number, number] | null }> = ({ location }
   const map = useMap();
   useEffect(() => {
     if (location && typeof location[0] === "number" && typeof location[1] === "number") {
-      map.flyTo(location, Math.max(map.getZoom(), 11), { duration: 1.2 });
+      try {
+        if (map && map.getContainer && map.getContainer()) {
+          map.flyTo(location, Math.max(map.getZoom(), 11), { duration: 1.2 });
+        }
+      } catch {
+        // safely ignore if map is unmounted or in transition
+      }
     }
   }, [location, map]);
   return null;
 };
 
-// Invalidate size on mount / resize so tiles render edge-to-edge
+// Invalidate size on mount / container resize / window resize so tiles render edge-to-edge
 const MapResizeHandler: React.FC = () => {
   const map = useMap();
   useEffect(() => {
-    const timer = setTimeout(() => {
-      map.invalidateSize();
-    }, 100);
+    const safeInvalidate = () => {
+      try {
+        if (map && map.getContainer && map.getContainer()) {
+          map.invalidateSize();
+        }
+      } catch {
+        // safely ignore if map is unmounted or container removed
+      }
+    };
+
+    // Initial size invalidation after mounting
+    const timer1 = setTimeout(safeInvalidate, 150);
+    const timer2 = setTimeout(safeInvalidate, 500);
 
     const container = map.getContainer();
-    if (!container || typeof ResizeObserver === 'undefined') {
-      return () => clearTimeout(timer);
+    let ro: ResizeObserver | null = null;
+    if (container && typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => {
+        safeInvalidate();
+      });
+      ro.observe(container);
     }
 
-    const ro = new ResizeObserver(() => {
-      map.invalidateSize();
-    });
-    ro.observe(container);
+    const handleWindowResize = () => {
+      safeInvalidate();
+    };
+
+    window.addEventListener('resize', handleWindowResize, { passive: true });
+    window.addEventListener('orientationchange', handleWindowResize, { passive: true });
 
     return () => {
-      clearTimeout(timer);
-      ro.disconnect();
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
+      window.removeEventListener('orientationchange', handleWindowResize);
     };
   }, [map]);
   return null;
@@ -660,20 +693,22 @@ export const AdvancedMap: React.FC<AdvancedMapProps> = ({
       });
   }, [markers]);
 
-  // Normalize polygons to support coordinates or positions
+  // Normalize polygons to support coordinates or positions, filtering invalid polygons
   const normalizedPolygons = useMemo(() => {
-    return polygons.map((poly, index) => {
-      let positions: [number, number][] = poly.positions || [];
-      if ((!positions || positions.length === 0) && poly.coordinates && poly.coordinates[0]) {
-        // GeoJSON [lon, lat] -> [lat, lon]
-        positions = poly.coordinates[0].map(([lon, lat]) => [lat, lon]);
-      }
-      return {
-        ...poly,
-        id: poly.id || index,
-        positions,
-      };
-    });
+    return polygons
+      .map((poly, index) => {
+        let positions: [number, number][] = poly.positions || [];
+        if ((!positions || positions.length === 0) && poly.coordinates && poly.coordinates[0]) {
+          // GeoJSON [lon, lat] -> [lat, lon]
+          positions = poly.coordinates[0].map(([lon, lat]) => [lat, lon]);
+        }
+        return {
+          ...poly,
+          id: poly.id || index,
+          positions,
+        };
+      })
+      .filter((poly) => Array.isArray(poly.positions) && poly.positions.length >= 3);
   }, [polygons]);
 
   // Normalize circles to support radius or radiusKm
@@ -689,12 +724,13 @@ export const AdvancedMap: React.FC<AdvancedMapProps> = ({
   }, [circles]);
 
   return (
-    <div className={`advanced-map relative z-0 overflow-hidden ${className}`} style={style}>
+    <div className={`advanced-map relative z-0 overflow-hidden ${className}`} style={{ ...style, isolation: 'isolate' }}>
       <MapContainer
         center={center}
         zoom={zoom}
         minZoom={4}
-        maxBounds={[[5.0, 65.0], [38.5, 100.0]]}
+        maxBounds={[[4.0, 64.0], [40.0, 102.0]]}
+        maxBoundsViscosity={0.7}
         zoomControl={false}
         style={{ height: "100%", width: "100%", background: "#0B1713" }}
         scrollWheelZoom={true}
@@ -848,8 +884,8 @@ export const AdvancedMap: React.FC<AdvancedMapProps> = ({
           </Marker>
         )}
 
-        {/* Clicked location marker */}
-        {clickedLocation && (
+        {/* Clicked location marker (rendered only if target is not already marked by a selected pin) */}
+        {clickedLocation && !normalizedMarkers.some((m) => m.category === 'selected') && (
           <Marker
             position={[clickedLocation.lat, clickedLocation.lng]}
             icon={createCustomIcon("orange", "small")}

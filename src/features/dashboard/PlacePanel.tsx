@@ -492,10 +492,41 @@ export function PlacePanel({ place, fires, forest }: PlacePanelProps) {
                     Executive Risk Brief
                   </span>
                 </div>
-                <span className="px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-800/60 text-[10px] font-mono text-emerald-300">
-                  {summary.source === 'gemini' ? 'Gemini 3.8 Flash' : 'Deterministic Protocol'}
+                <span
+                  className={`px-2 py-0.5 rounded border text-[10px] font-mono ${
+                    summary.source === 'gemini'
+                      ? 'bg-emerald-950/80 border-emerald-800/60 text-emerald-300'
+                      : 'bg-amber-950/80 border-amber-800/60 text-amber-300'
+                  }`}
+                >
+                  {summary.source === 'gemini'
+                    ? 'Gemini Intelligence'
+                    : summary.fallback
+                      ? 'Rule-Based Fallback'
+                      : 'Rule-Based Protocol'}
                 </span>
               </div>
+
+              {summary.fallback && (
+                <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-900/60 text-[11px] text-amber-200 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>
+                      {summary.fallbackReason === 'invalid_key'
+                        ? 'AI key unconfigured · Showing sensor fallback'
+                        : 'AI unavailable · Showing sensor fallback'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={analyse}
+                    disabled={loadingAi}
+                    className="text-amber-300 hover:text-amber-100 font-semibold underline text-[10px] cursor-pointer"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
 
               <div className="text-xs text-[#CBDAD0] leading-relaxed whitespace-pre-line font-medium">
                 {summary.summary}
