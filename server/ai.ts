@@ -1,9 +1,21 @@
 import { GoogleGenAI } from '@google/genai';
 import { config } from './config.js';
-import { getFires } from './data/fires.js';
-import { getAirQuality } from './data/airQuality.js';
+import { getFires, type FireResult } from './data/fires.js';
+import { getAirQuality, type AqResult } from './data/airQuality.js';
 import { DEFORESTATION_HOTSPOTS } from './data/deforestation.js';
 import { haversineKm } from './data/geo.js';
+
+/**
+ * Injectable data providers for buildContext.
+ * Production code omits this parameter and uses the real live providers.
+ * Tests pass controlled mock implementations to make the test deterministic.
+ */
+export interface BuildContextProviders {
+  /** Override the fires data provider (defaults to getFires(1)). */
+  getFiresData?: () => Promise<FireResult>;
+  /** Override the air-quality data provider (defaults to getAirQuality()). */
+  getAirQualityData?: () => Promise<AqResult | null>;
+}
 
 export interface AreaContext {
   name: string;
@@ -108,8 +120,16 @@ export function clearAiSummaryCache(): void {
   aiSummaryCacheStore.clear();
 }
 
-export async function buildContext(name: string, lat: number, lon: number, radiusKm = 150): Promise<AreaContext> {
-  const [fires, aq] = await Promise.all([getFires(1), getAirQuality().catch(() => null)]);
+export async function buildContext(
+  name: string,
+  lat: number,
+  lon: number,
+  radiusKm = 150,
+  providers?: BuildContextProviders,
+): Promise<AreaContext> {
+  const firesLoader = providers?.getFiresData ?? (() => getFires(1));
+  const aqLoader = providers?.getAirQualityData ?? (() => getAirQuality());
+  const [fires, aq] = await Promise.all([firesLoader(), aqLoader().catch(() => null)]);
   const aqAvailable = aq !== null;
 
   const near = fires.points.filter((p) => haversineKm(lat, lon, p.lat, p.lon) <= radiusKm);

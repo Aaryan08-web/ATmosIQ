@@ -18,8 +18,11 @@ import {
   setCachedAiSummary,
   clearAiSummaryCache,
   type AreaContext,
+  type BuildContextProviders,
 } from '../ai.js';
 import type { AiSummary } from '../../src/types.js';
+import type { AqResult } from '../data/airQuality.js';
+import type { FireResult } from '../data/fires.js';
 
 // Dynamically import frontend page component for server-side HTML rendering tests
 // @ts-ignore - TS resolution handled via bundler paths in root tsconfig
@@ -300,8 +303,100 @@ test('Fallback response rendered successfully in the frontend', () => {
 
 // Test 7: Location Differentiation for Delhi, Pune, and Sundarbans
 test('Location Differentiation: Delhi, Pune and Sundarbans use actual coordinates and generate distinct summaries', async () => {
+  // ---------------------------------------------------------------------------
+  // Controlled fixture data: mock the external providers so the test is
+  // deterministic regardless of live Open-Meteo or NASA FIRMS responses.
+  // These values are fixed and do NOT encode location-specific narratives in
+  // production code — they are purely test-layer fixture data.
+  // ---------------------------------------------------------------------------
+
+  // Fixed AQ stations covering all three query coordinates within 500 km.
+  // Delhi NCR at (28.6139, 77.209) → nearest is "Delhi NCR" at same coords → AQI 175
+  // Pune at (18.5204, 73.8567)     → nearest is "Pune" at same coords      → AQI 94
+  // Sundarbans at (21.95, 88.85)   → nearest is "Kolkata" at (22.5726, 88.3639) → AQI 120
+  const mockAqResult: AqResult = {
+    points: [
+      {
+        name: 'Delhi NCR',
+        state: 'Delhi',
+        country: 'India',
+        lat: 28.6139,
+        lon: 77.2090,
+        usAqi: 175,
+        pm25: 88.5,
+        pm10: 120.0,
+        no2: 45.0,
+        so2: 12.0,
+        co: 500.0,
+        o3: 30.0,
+        category: 'Unhealthy',
+        time: '2026-01-01T00:00',
+      },
+      {
+        name: 'Pune',
+        state: 'Maharashtra',
+        country: 'India',
+        lat: 18.5204,
+        lon: 73.8567,
+        usAqi: 94,
+        pm25: 32.0,
+        pm10: 55.0,
+        no2: 20.0,
+        so2: 5.0,
+        co: 200.0,
+        o3: 40.0,
+        category: 'Moderate',
+        time: '2026-01-01T00:00',
+      },
+      {
+        name: 'Kolkata',
+        state: 'West Bengal',
+        country: 'India',
+        lat: 22.5726,
+        lon: 88.3639,
+        usAqi: 120,
+        pm25: 45.0,
+        pm10: 70.0,
+        no2: 25.0,
+        so2: 8.0,
+        co: 300.0,
+        o3: 35.0,
+        category: 'Unhealthy for sensitive groups',
+        time: '2026-01-01T00:00',
+      },
+    ],
+    source: 'mock-fixture',
+    live: false,
+    fetchedAt: new Date().toISOString(),
+  };
+
+  // Fixed fires: a cluster near Delhi (within 150 km) and nothing near
+  // Pune or Sundarbans, so Sundarbans has fires.count === 0.
+  const mockFireResult: FireResult = {
+    points: [
+      // Fire near Delhi (within 150 km radius)
+      { lat: 28.9, lon: 77.1, frp: 42.0, confidence: 'nominal', acquired: '2026-01-01 06:00 UTC', satellite: 'VIIRS (mock)', daynight: 'D' },
+      { lat: 29.1, lon: 77.4, frp: 85.0, confidence: 'high',    acquired: '2026-01-01 06:00 UTC', satellite: 'VIIRS (mock)', daynight: 'D' },
+      { lat: 28.5, lon: 76.9, frp: 30.0, confidence: 'nominal', acquired: '2026-01-01 06:00 UTC', satellite: 'VIIRS (mock)', daynight: 'N' },
+      // Fire well outside both Pune and Sundarbans 150 km radius (placed near Karnataka coast, >200 km from Pune)
+      { lat: 15.0, lon: 74.0, frp: 15.0, confidence: 'nominal', acquired: '2026-01-01 06:00 UTC', satellite: 'VIIRS (mock)', daynight: 'D' },
+    ],
+    total: 4,
+    source: 'mock-fixture',
+    live: false,
+    isDemo: true,
+    status: 'sample',
+    fetchedAt: new Date().toISOString(),
+    bbox: [68.0, 6.5, 97.5, 37.5],
+  };
+
+  const providers: BuildContextProviders = {
+    getFiresData: async () => mockFireResult,
+    getAirQualityData: async () => mockAqResult,
+  };
+
   // Delhi coordinates: 28.6139°N, 77.2090°E
-  const delhiCtx = await buildContext('Delhi NCR', 28.6139, 77.209, 150);
+  const delhiCtx = await buildContext('Delhi NCR', 28.6139, 77.209, 150, providers);
   assert.equal(delhiCtx.lat, 28.6139);
   assert.equal(delhiCtx.lon, 77.209);
   assert.equal(delhiCtx.airQuality?.station, 'Delhi NCR');
@@ -309,7 +404,7 @@ test('Location Differentiation: Delhi, Pune and Sundarbans use actual coordinate
   assert.equal(delhiCtx.airQuality?.category, 'Unhealthy');
 
   // Pune coordinates: 18.5204°N, 73.8567°E
-  const puneCtx = await buildContext('Pune & Western Ghats', 18.5204, 73.8567, 150);
+  const puneCtx = await buildContext('Pune & Western Ghats', 18.5204, 73.8567, 150, providers);
   assert.equal(puneCtx.lat, 18.5204);
   assert.equal(puneCtx.lon, 73.8567);
   assert.equal(puneCtx.airQuality?.station, 'Pune');
@@ -317,7 +412,7 @@ test('Location Differentiation: Delhi, Pune and Sundarbans use actual coordinate
   assert.equal(puneCtx.airQuality?.category, 'Moderate');
 
   // Sundarbans coordinates: 21.9500°N, 88.8500°E
-  const sundarCtx = await buildContext('Sundarbans Delta', 21.95, 88.85, 150);
+  const sundarCtx = await buildContext('Sundarbans Delta', 21.95, 88.85, 150, providers);
   assert.equal(sundarCtx.lat, 21.95);
   assert.equal(sundarCtx.lon, 88.85);
   assert.equal(sundarCtx.airQuality?.station, 'Kolkata');
