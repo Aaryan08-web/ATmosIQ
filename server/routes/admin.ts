@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db.js';
+import { config } from '../config.js';
 import { requireAuth, requireRole } from './auth.js';
 import { getGfwSyncStatus } from '../data/gfwIngestion.js';
-import { testGeminiConnectivity, getGeminiStatus } from '../ai.js';
+import { testGeminiConnectivity, getGeminiStatus, listAvailableGeminiModels } from '../ai.js';
 
 export const adminRouter = Router();
 
@@ -53,8 +54,35 @@ adminRouter.get('/stats', requireAuth, requireRole('admin'), (_req, res) => {
     gfwAlerts: gfwAlertCount,
     gfwSync: gfwStatus,
     geminiStatus: getGeminiStatus(),
+    geminiConfig: {
+      primaryModel: config.geminiModel,
+      secondaryModel: config.geminiSecondaryModel,
+      tertiaryModel: config.geminiTertiaryModel,
+    },
     timestamp: new Date().toISOString(),
   });
+});
+
+/** Admin-only: list and verify available Gemini models from Google. */
+adminRouter.get('/diagnostics/gemini/models', requireAuth, requireRole('admin'), async (_req, res) => {
+  try {
+    const models = await listAvailableGeminiModels();
+    res.json({
+      ok: true,
+      configuredPrimaryModel: config.geminiModel,
+      configuredSecondaryModel: config.geminiSecondaryModel,
+      configuredTertiaryModel: config.geminiTertiaryModel,
+      models,
+    });
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      configuredPrimaryModel: config.geminiModel,
+      configuredSecondaryModel: config.geminiSecondaryModel,
+      configuredTertiaryModel: config.geminiTertiaryModel,
+    });
+  }
 });
 
 /** Admin-only: run a live, safe diagnostic connectivity test to Gemini. */
@@ -63,14 +91,23 @@ adminRouter.post('/diagnostics/gemini', requireAuth, requireRole('admin'), async
     const result = await testGeminiConnectivity(
       req.body?.key,
       req.body?.model,
-      req.body?.secondaryModel
+      req.body?.secondaryModel,
+      req.body?.tertiaryModel
     );
-    res.json(result);
+    res.json({
+      ...result,
+      configuredPrimaryModel: config.geminiModel,
+      configuredSecondaryModel: config.geminiSecondaryModel,
+      configuredTertiaryModel: config.geminiTertiaryModel,
+    });
   } catch (err) {
     res.status(500).json({
       ok: false,
       status: 'error',
       message: err instanceof Error ? err.message : String(err),
+      configuredPrimaryModel: config.geminiModel,
+      configuredSecondaryModel: config.geminiSecondaryModel,
+      configuredTertiaryModel: config.geminiTertiaryModel,
     });
   }
 });

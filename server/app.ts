@@ -74,7 +74,9 @@ export function createApp() {
         gemini: {
           configured: !!config.geminiKey,
           model: config.geminiModel,
+          primaryModel: config.geminiModel,
           secondaryModel: config.geminiSecondaryModel,
+          tertiaryModel: config.geminiTertiaryModel,
           status: geminiStatus.status,
           lastSuccessAt: geminiStatus.lastSuccessAt,
           lastErrorAt: geminiStatus.lastErrorAt,

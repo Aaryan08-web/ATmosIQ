@@ -33,7 +33,7 @@ export interface SummariseResult {
   text: string;
   source: 'gemini' | 'rule-based';
   fallback?: boolean;
-  fallbackReason?: 'service_unavailable' | 'timeout' | 'invalid_key' | 'quota_exhausted' | 'error' | 'no_key';
+  fallbackReason?: 'service_unavailable' | 'timeout' | 'invalid_key' | 'quota_exhausted' | 'model_not_found' | 'error' | 'no_key';
   attempts?: number;
   model?: string;
   isSecondary?: boolean;
@@ -59,6 +59,7 @@ export interface GeminiDiagnosticLog {
   selectedModel?: string;
   primaryModel: string;
   secondaryModel?: string;
+  tertiaryModel?: string;
   modelsAttempted: string[];
   httpStatus: number;
   attempts: number;
@@ -75,6 +76,7 @@ export interface GeminiRetryOptions {
   apiKey?: string;
   model?: string;
   secondaryModel?: string;
+  tertiaryModel?: string;
   maxAttempts?: number;
   perModelAttempts?: number;
   baseDelayMs?: number;
@@ -109,10 +111,129 @@ export interface CachedAiSummaryPayload {
   timing: AiSummaryTiming;
 }
 
+export interface DiscoveredModel {
+  name: string;
+  displayName?: string;
+  supportedActions: string[];
+}
+
+let cachedDiscoveredModels: { list: DiscoveredModel[]; expiresAt: number } | null = null;
+const MODEL_DISCOVERY_TTL_MS = 600000; // 10 minutes
+
+export function clearModelDiscoveryCacheForTests(): void {
+  cachedDiscoveredModels = null;
+}
+
+export async function listAvailableGeminiModels(
+  apiKey?: string,
+  options?: { bypassCache?: boolean; timeoutMs?: number }
+): Promise<DiscoveredModel[]> {
+  const key = apiKey !== undefined ? apiKey : config.geminiKey;
+  if (!key) {
+    throw new Error('No GEMINI_API_KEY available for model discovery.');
+  }
+
+  const now = Date.now();
+  if (!options?.bypassCache && cachedDiscoveredModels && now < cachedDiscoveredModels.expiresAt) {
+    return cachedDiscoveredModels.list;
+  }
+
+  try {
+    const ai = new GoogleGenAI({ apiKey: key, httpOptions: { timeout: options?.timeoutMs ?? 7000 } });
+    const response = await ai.models.list();
+    const models: DiscoveredModel[] = [];
+    for await (const m of response) {
+      const cleanName = (m.name || '').replace(/^models\//, '');
+      const actions = (m.supportedActions as string[]) || [];
+      if (actions.length === 0 || actions.includes('generateContent')) {
+        models.push({
+          name: cleanName,
+          displayName: m.displayName,
+          supportedActions: actions,
+        });
+      }
+    }
+    cachedDiscoveredModels = {
+      list: models,
+      expiresAt: now + MODEL_DISCOVERY_TTL_MS,
+    };
+    return models;
+  } catch (err: unknown) {
+    const parsed = parseGeminiError(err, key);
+    logConciseError('gemini', parsed.status || 500, `Model discovery failed: ${parsed.message}`);
+    throw new Error(`Model discovery failed: ${parsed.message}`);
+  }
+}
+
+export async function verifyModelSupport(
+  model: string,
+  apiKey?: string
+): Promise<{ supported: boolean; reason: 'verified' | 'not_found' | 'discovery_failed'; message?: string }> {
+  try {
+    const models = await listAvailableGeminiModels(apiKey);
+    const cleanModel = model.replace(/^models\//, '');
+    const found = models.some((m) => m.name === cleanModel || m.name === model);
+    if (found) {
+      return { supported: true, reason: 'verified' };
+    }
+    return {
+      supported: false,
+      reason: 'not_found',
+      message: `Model '${model}' is not present among models supporting generateContent for this API key.`,
+    };
+  } catch (err: unknown) {
+    const msg = sanitizeErrorDetails(err instanceof Error ? err.message : String(err), apiKey);
+    return {
+      supported: false,
+      reason: 'discovery_failed',
+      message: msg,
+    };
+  }
+}
+
+export async function discoverViableSecondaryModel(
+  apiKey?: string,
+  preferredCandidate?: string,
+  excludeModels: string[] = []
+): Promise<string | null> {
+  const preferred = preferredCandidate || config.geminiSecondaryModel;
+  const priorityCandidates = [
+    preferred,
+    'gemini-3.5-flash-lite',
+    'gemini-3.5-flash',
+    'gemini-3.6-flash',
+    'gemini-3.1-flash-lite',
+    'gemini-3.7-flash',
+  ]
+    .filter(Boolean)
+    .filter((m) => !excludeModels.includes(m));
+
+  const uniqueCandidates = Array.from(new Set(priorityCandidates));
+
+  try {
+    const available = await listAvailableGeminiModels(apiKey);
+    const availableNames = new Set(available.map((m) => m.name));
+
+    for (const cand of uniqueCandidates) {
+      if (availableNames.has(cand)) {
+        return cand;
+      }
+    }
+    const fallbackMatch = available.find((m) => !excludeModels.includes(m.name));
+    return fallbackMatch ? fallbackMatch.name : null;
+  } catch (err: unknown) {
+    const msg = sanitizeErrorDetails(err instanceof Error ? err.message : String(err), apiKey);
+    logConciseError('gemini', 'discovery_failed', `Failed to discover viable secondary model: ${msg}`);
+    return uniqueCandidates[0] || null;
+  }
+}
+
 export interface GeminiProviderStatus {
   configured: boolean;
   model: string;
+  primaryModel?: string;
   secondaryModel?: string;
+  tertiaryModel?: string;
   status: 'active' | 'degraded' | 'invalid_key' | 'model_not_found' | 'unconfigured' | 'configured' | 'error';
   lastSuccessAt: string | null;
   lastErrorAt: string | null;
@@ -124,7 +245,9 @@ export interface GeminiProviderStatus {
 let currentGeminiStatus: GeminiProviderStatus = {
   configured: !!config.geminiKey,
   model: config.geminiModel,
+  primaryModel: config.geminiModel,
   secondaryModel: config.geminiSecondaryModel,
+  tertiaryModel: config.geminiTertiaryModel,
   status: config.geminiKey ? 'configured' : 'unconfigured',
   lastSuccessAt: null,
   lastErrorAt: null,
@@ -136,7 +259,9 @@ let currentGeminiStatus: GeminiProviderStatus = {
 export function getGeminiStatus(): GeminiProviderStatus {
   currentGeminiStatus.configured = !!config.geminiKey;
   currentGeminiStatus.model = config.geminiModel;
+  currentGeminiStatus.primaryModel = config.geminiModel;
   currentGeminiStatus.secondaryModel = config.geminiSecondaryModel;
+  currentGeminiStatus.tertiaryModel = config.geminiTertiaryModel;
   if (!config.geminiKey) {
     currentGeminiStatus.status = 'unconfigured';
   } else if (currentGeminiStatus.status === 'unconfigured') {
@@ -151,30 +276,37 @@ export function updateGeminiProviderStatus(updates: Partial<GeminiProviderStatus
     ...updates,
     configured: !!config.geminiKey,
     model: updates.model || config.geminiModel,
+    primaryModel: updates.primaryModel || config.geminiModel,
     secondaryModel: updates.secondaryModel || config.geminiSecondaryModel,
+    tertiaryModel: updates.tertiaryModel || config.geminiTertiaryModel,
   };
   return { ...currentGeminiStatus };
 }
 
 /**
  * Diagnostic utility that tests real Gemini connectivity using the configured credentials.
- * Tests primary model, and falls back to testing secondary model if primary fails.
+ * Tests primary model, and falls back to testing secondary and tertiary models if earlier models fail.
  * Does not expose API keys or secrets in logs or responses.
  */
 export async function testGeminiConnectivity(
   apiKey?: string,
   model?: string,
-  secondaryModel?: string
+  secondaryModel?: string,
+  tertiaryModel?: string
 ): Promise<{
   ok: boolean;
   status: 'active' | 'invalid_key' | 'model_not_found' | 'degraded' | 'unconfigured' | 'error';
   message: string;
   model: string;
+  primaryModel: string;
+  secondaryModel?: string;
+  tertiaryModel?: string;
   latencyMs: number;
 }> {
   const key = apiKey || config.geminiKey;
   const primary = model || config.geminiModel;
   const secondary = secondaryModel || config.geminiSecondaryModel;
+  const tertiary = tertiaryModel || config.geminiTertiaryModel;
 
   if (!key) {
     updateGeminiProviderStatus({
@@ -187,6 +319,9 @@ export async function testGeminiConnectivity(
       status: 'unconfigured',
       message: 'No GEMINI_API_KEY configured in environment.',
       model: primary,
+      primaryModel: primary,
+      secondaryModel: secondary,
+      tertiaryModel: tertiary,
       latencyMs: 0,
     };
   }
@@ -214,6 +349,9 @@ export async function testGeminiConnectivity(
         status: 'active',
         message: `Successfully connected to primary Google Gemini model '${primary}' (${latencyMs}ms).`,
         model: primary,
+        primaryModel: primary,
+        secondaryModel: secondary,
+        tertiaryModel: tertiary,
         latencyMs,
       };
     }
@@ -222,7 +360,7 @@ export async function testGeminiConnectivity(
     const latencyMs = Math.round(performance.now() - t0);
     const parsed = parseGeminiError(err, key);
 
-    // Fatal key error: secondary model will also fail
+    // Fatal key error: secondary/tertiary models will also fail
     if (parsed.status === 401 || /API_KEY_INVALID|invalid api key|api key not valid/i.test(parsed.message)) {
       updateGeminiProviderStatus({
         status: 'invalid_key',
@@ -236,11 +374,15 @@ export async function testGeminiConnectivity(
         status: 'invalid_key',
         message: parsed.message,
         model: primary,
+        primaryModel: primary,
+        secondaryModel: secondary,
+        tertiaryModel: tertiary,
         latencyMs,
       };
     }
 
-    // 2. Test secondary model if primary failed with 503, 504, 429, or 404
+    // 2. Test secondary model if primary failed
+    let secParsed: ParsedGeminiError | null = null;
     if (secondary && secondary !== primary) {
       const tSec = performance.now();
       try {
@@ -263,25 +405,75 @@ export async function testGeminiConnectivity(
             status: 'degraded',
             message: `Primary model '${primary}' failed (${parsed.message}), but secondary model '${secondary}' connected successfully (${latencyMsSec}ms).`,
             model: secondary,
+            primaryModel: primary,
+            secondaryModel: secondary,
+            tertiaryModel: tertiary,
             latencyMs: latencyMsSec,
           };
         }
-      } catch {
-        // secondary also failed
+      } catch (errSec) {
+        secParsed = parseGeminiError(errSec, key);
+      }
+    }
+
+    // 3. Test tertiary model if secondary failed or wasn't distinct
+    let tertParsed: ParsedGeminiError | null = null;
+    if (tertiary && tertiary !== primary && tertiary !== secondary) {
+      const tTert = performance.now();
+      try {
+        const aiTertiary = new GoogleGenAI({ apiKey: key, httpOptions: { timeout: 8000 } });
+        const resTert = await aiTertiary.models.generateContent({
+          model: tertiary,
+          contents: 'Respond with the single word OK.',
+        });
+        const latencyMsTert = Math.round(performance.now() - tTert);
+        if (resTert?.text?.trim()) {
+          updateGeminiProviderStatus({
+            status: 'degraded',
+            lastSuccessAt: new Date().toISOString(),
+            lastErrorMessage: `Primary '${primary}' and secondary '${secondary}' failed; tertiary '${tertiary}' active`,
+            lastHttpStatus: 200,
+            testedAt: new Date().toISOString(),
+          });
+          return {
+            ok: true,
+            status: 'degraded',
+            message: `Primary model '${primary}' and secondary '${secondary}' failed, but tertiary model '${tertiary}' connected successfully (${latencyMsTert}ms).`,
+            model: tertiary,
+            primaryModel: primary,
+            secondaryModel: secondary,
+            tertiaryModel: tertiary,
+            latencyMs: latencyMsTert,
+          };
+        }
+      } catch (errTert) {
+        tertParsed = parseGeminiError(errTert, key);
       }
     }
 
     let status: 'invalid_key' | 'model_not_found' | 'degraded' | 'error' = 'error';
-    if (parsed.status === 404 || /not found|unsupported model/i.test(parsed.message)) {
+    const isPrimary404 = parsed.status === 404 || /not found|unsupported model|no longer available/i.test(parsed.message);
+    const isSec404 = secParsed ? (secParsed.status === 404 || /not found|unsupported model|no longer available/i.test(secParsed.message)) : false;
+    const isTert404 = tertParsed ? (tertParsed.status === 404 || /not found|unsupported model|no longer available/i.test(tertParsed.message)) : false;
+
+    if (isPrimary404 && (!secondary || isSec404) && (!tertiary || isTert404)) {
       status = 'model_not_found';
     } else if (parsed.status === 503 || parsed.status === 504 || parsed.status === 429) {
       status = 'degraded';
+    } else if (isPrimary404 || isSec404 || isTert404) {
+      status = 'model_not_found';
     }
+
+    const failedDetails = [
+      `Primary '${primary}': ${parsed.message}`,
+      secParsed ? `Secondary '${secondary}': ${secParsed.message}` : null,
+      tertParsed ? `Tertiary '${tertiary}': ${tertParsed.message}` : null,
+    ].filter(Boolean).join('; ');
 
     updateGeminiProviderStatus({
       status,
       lastErrorAt: new Date().toISOString(),
-      lastErrorMessage: parsed.message,
+      lastErrorMessage: failedDetails,
       lastHttpStatus: parsed.status,
       testedAt: new Date().toISOString(),
     });
@@ -289,8 +481,11 @@ export async function testGeminiConnectivity(
     return {
       ok: false,
       status,
-      message: parsed.message,
+      message: failedDetails,
       model: primary,
+      primaryModel: primary,
+      secondaryModel: secondary,
+      tertiaryModel: tertiary,
       latencyMs,
     };
   }
@@ -487,7 +682,7 @@ export function parseGeminiError(err: unknown, apiKey?: string): ParsedGeminiErr
   const isKeyError = /API_KEY_INVALID|UNAUTHENTICATED|invalid api key|api key not valid/i.test(rawMsg) || status === 401;
   const isPermissionError = /PERMISSION_DENIED|permission denied|forbidden/i.test(rawMsg) || status === 403;
   const isInvalidRequest = (/INVALID_ARGUMENT|invalid argument|invalid request/i.test(rawMsg) || status === 400 || status === 422) && !isKeyError;
-  const isModelNotFound = /NOT_FOUND|model not found|unsupported model|is not supported for/i.test(rawMsg) || status === 404;
+  const isModelNotFound = /NOT_FOUND|model not found|unsupported model|is not supported for|no longer available/i.test(rawMsg) || status === 404;
 
   if (isKeyError || isPermissionError || isInvalidRequest) {
     return {
@@ -616,17 +811,17 @@ export async function callGeminiWithRetry(
   }
 
   const primaryModel = options.model || config.geminiModel;
-  const secondaryModel = options.secondaryModel || config.geminiSecondaryModel;
-  const modelsToTry: string[] = [primaryModel];
-  if (secondaryModel && secondaryModel !== primaryModel) {
-    modelsToTry.push(secondaryModel);
-  }
+  const secondaryModel = 'secondaryModel' in options ? options.secondaryModel : config.geminiSecondaryModel;
+  const tertiaryModel = 'tertiaryModel' in options ? options.tertiaryModel : config.geminiTertiaryModel;
+  const rawCandidates = [primaryModel, secondaryModel, tertiaryModel].filter(Boolean) as string[];
+  // Deduplicate candidate models preserving priority order
+  const modelsToTry = Array.from(new Set(rawCandidates));
 
   // Sensible deadlines for AWS EC2 t3.micro environment (2 vCPU, 1 GB RAM)
-  const timeoutMs = options.timeoutMs ?? 7000; // 7s per attempt
-  const totalTimeoutMs = options.totalTimeoutMs ?? 15000; // 15s overall budget
-  const maxAttempts = options.maxAttempts ?? (modelsToTry.length > 1 ? 3 : 2);
+  const timeoutMs = options.timeoutMs ?? 6000; // 6s per attempt
+  const totalTimeoutMs = options.totalTimeoutMs ?? 16000; // 16s overall budget
   const perModelAttempts = options.perModelAttempts ?? 2;
+  const maxAttempts = options.maxAttempts ?? (modelsToTry.length >= 3 ? 5 : modelsToTry.length === 2 ? 3 : 2);
   const baseDelayMs = options.baseDelayMs ?? 600;
   const maxDelayMs = options.maxDelayMs ?? 4000;
   const jitter = options.jitter ?? true;
@@ -691,7 +886,7 @@ export async function callGeminiWithRetry(
           updateGeminiProviderStatus({
             status: isSecondary ? 'degraded' : 'active',
             lastSuccessAt: new Date().toISOString(),
-            lastErrorMessage: isSecondary ? `Primary model failed; operational on secondary '${currentModel}'` : null,
+            lastErrorMessage: isSecondary ? `Primary model failed; operational on fallback model '${currentModel}'` : null,
             lastHttpStatus: 200,
             testedAt: new Date().toISOString(),
           });
@@ -720,19 +915,28 @@ export async function callGeminiWithRetry(
           break;
         }
 
-        // Model not found (404) -> switch to secondary model immediately without burning attempts
-        if (parsed.status === 404 || /not found|unsupported model/i.test(parsed.message)) {
+        // Model not found (404) -> log clearly and switch to next fallback model immediately without burning attempts
+        if (parsed.status === 404 || /not found|unsupported model|no longer available/i.test(parsed.message)) {
+          logConciseError(
+            'gemini',
+            404,
+            `Model '${currentModel}' not found or unavailable (${parsed.message}). Switching to fallback model.`,
+            options.logger
+          );
           break;
         }
 
         // Global attempt cap reached
         if (totalAttempts >= maxAttempts) {
+          if (mIdx < modelsToTry.length - 1 && !options.maxAttempts) {
+            break;
+          }
           mIdx = modelsToTry.length;
           break;
         }
 
         // Can we retry this same model?
-        const canRetrySameModel = modelAttempt < perModelAttempts && parsed.isRetryable;
+        const canRetrySameModel = modelAttempt < perModelAttempts && parsed.isRetryable && totalAttempts < maxAttempts;
         const timeAllowsRetry = totalTimeoutMs - (performance.now() - tOverallStart) > 2000;
 
         if (canRetrySameModel && timeAllowsRetry) {
@@ -741,7 +945,7 @@ export async function callGeminiWithRetry(
           await sleepFn(delay);
           totalBackoffMs += Math.round(performance.now() - tBackoffStart);
         } else {
-          // Break to next candidate model (secondary model)
+          // Break to next candidate model in sequence
           break;
         }
       }
@@ -818,7 +1022,8 @@ export async function summarise(
 
   const tStart = performance.now();
   const primaryModel = options?.model ?? config.geminiModel;
-  const secondaryModel = options?.secondaryModel ?? config.geminiSecondaryModel;
+  const secondaryModel = 'secondaryModel' in (options ?? {}) ? options?.secondaryModel : config.geminiSecondaryModel;
+  const tertiaryModel = 'tertiaryModel' in (options ?? {}) ? options?.tertiaryModel : config.geminiTertiaryModel;
 
   try {
     const res = await callGeminiWithRetry(prompt, {
@@ -826,6 +1031,7 @@ export async function summarise(
       apiKey: effectiveKey,
       model: primaryModel,
       secondaryModel,
+      tertiaryModel,
     });
     const totalMs = Math.round(performance.now() - tStart);
 
@@ -837,6 +1043,7 @@ export async function summarise(
         selectedModel: res.model,
         primaryModel,
         secondaryModel,
+        tertiaryModel,
         modelsAttempted: res.modelsAttempted,
         httpStatus: 200,
         attempts: res.attempts,
@@ -872,19 +1079,24 @@ export async function summarise(
     const isKeyErr =
       /API_KEY_INVALID|UNAUTHENTICATED|invalid api key|api key not valid/i.test(parsed.message) ||
       parsed.status === 401;
+    const isModelNotFound =
+      parsed.status === 404 ||
+      /not found|unsupported model|no longer available/i.test(parsed.message);
     const isTimeout = parsed.status === 504 || /timed?\s*out|deadline_exceeded/i.test(parsed.message);
     const is503 = parsed.status === 503 || /503|service unavailable/i.test(parsed.message);
     const isQuota = parsed.status === 429 || /429|resource_exhausted|quota|rate limit/i.test(parsed.message);
 
     const fallbackReason: SummariseResult['fallbackReason'] = isKeyErr
       ? 'invalid_key'
-      : isQuota
-        ? 'quota_exhausted'
-        : is503
-          ? 'service_unavailable'
-          : isTimeout
-            ? 'timeout'
-            : 'error';
+      : isModelNotFound
+        ? 'model_not_found'
+        : isQuota
+          ? 'quota_exhausted'
+          : is503
+            ? 'service_unavailable'
+            : isTimeout
+              ? 'timeout'
+              : 'error';
 
     const modelsAttempted = (err as { modelsAttempted?: string[] })?.modelsAttempted || [primaryModel];
 
@@ -896,6 +1108,7 @@ export async function summarise(
         selectedModel: undefined,
         primaryModel,
         secondaryModel,
+        tertiaryModel,
         modelsAttempted,
         httpStatus: parsed.status,
         attempts: (err as { attempts?: number })?.attempts || modelsAttempted.length,
