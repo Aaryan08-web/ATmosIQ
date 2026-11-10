@@ -17,6 +17,7 @@ import {
   type CachedAiSummaryPayload,
 } from '../ai.js';
 import { requireAuth } from './auth.js';
+import { config } from '../config.js';
 import { db, type EnvironmentalAlertRow, type EnvironmentalSnapshotRow, type GfwForestAlertRow } from '../db.js';
 import { validateIndiaCoordinate, isPointInIndia } from '../data/geo.js';
 
@@ -388,7 +389,10 @@ dataRouter.post('/ai/summary', requireAuth, aiLimiter, async (req, res) => {
     const ctx = await buildContext(parsed.data.name, parsed.data.lat, parsed.data.lon, radiusKm);
     const dataRetrievalMs = Math.round(performance.now() - tRetrievalStart);
 
-    const out = await summarise(ctx);
+    const out = await summarise(ctx, {
+      timeoutMs: config.geminiSdkTimeoutMs,
+      totalTimeoutMs: config.geminiTotalTimeoutMs,
+    });
     const totalMs = Math.round(performance.now() - tStart);
 
     const timing: AiSummaryTiming = {

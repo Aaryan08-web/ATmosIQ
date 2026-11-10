@@ -139,7 +139,7 @@ export async function listAvailableGeminiModels(
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey: key, httpOptions: { timeout: options?.timeoutMs ?? 7000 } });
+    const ai = new GoogleGenAI({ apiKey: key, httpOptions: { timeout: options?.timeoutMs ?? 12000 } });
     const response = await ai.models.list();
     const models: DiscoveredModel[] = [];
     for await (const m of response) {
@@ -329,7 +329,7 @@ export async function testGeminiConnectivity(
   const t0 = performance.now();
   // 1. Test primary model
   try {
-    const ai = new GoogleGenAI({ apiKey: key, httpOptions: { timeout: 8000 } });
+    const ai = new GoogleGenAI({ apiKey: key, httpOptions: { timeout: 12000 } });
     const res = await ai.models.generateContent({
       model: primary,
       contents: 'Respond with the single word OK.',
@@ -386,7 +386,7 @@ export async function testGeminiConnectivity(
     if (secondary && secondary !== primary) {
       const tSec = performance.now();
       try {
-        const aiSecondary = new GoogleGenAI({ apiKey: key, httpOptions: { timeout: 8000 } });
+        const aiSecondary = new GoogleGenAI({ apiKey: key, httpOptions: { timeout: 12000 } });
         const resSec = await aiSecondary.models.generateContent({
           model: secondary,
           contents: 'Respond with the single word OK.',
@@ -421,7 +421,7 @@ export async function testGeminiConnectivity(
     if (tertiary && tertiary !== primary && tertiary !== secondary) {
       const tTert = performance.now();
       try {
-        const aiTertiary = new GoogleGenAI({ apiKey: key, httpOptions: { timeout: 8000 } });
+        const aiTertiary = new GoogleGenAI({ apiKey: key, httpOptions: { timeout: 12000 } });
         const resTert = await aiTertiary.models.generateContent({
           model: tertiary,
           contents: 'Respond with the single word OK.',
@@ -681,6 +681,16 @@ export function parseGeminiError(err: unknown, apiKey?: string): ParsedGeminiErr
   // Non-retryable conditions:
   const isKeyError = /API_KEY_INVALID|UNAUTHENTICATED|invalid api key|api key not valid/i.test(rawMsg) || status === 401;
   const isPermissionError = /PERMISSION_DENIED|permission denied|forbidden/i.test(rawMsg) || status === 403;
+  // "Manually set deadline Xs is too short. Minimum allowed deadline is 10s." — a misconfiguration
+  // in our SDK timeout; treat as non-retryable so we see a clear log and fall through immediately.
+  const isDeadlineTooShort = /deadline.*too short|minimum.*deadline/i.test(rawMsg);
+  if (isDeadlineTooShort) {
+    // This should never happen once the fix is deployed. Log with high visibility.
+    console.error(
+      '[ai] CRITICAL: SDK timeout is below Google\'s minimum (10 s). ' +
+      'Check GEMINI_SDK_TIMEOUT_MS or the timeoutMs option passed to callGeminiWithRetry().'
+    );
+  }
   const isInvalidRequest = (/INVALID_ARGUMENT|invalid argument|invalid request/i.test(rawMsg) || status === 400 || status === 422) && !isKeyError;
   const isModelNotFound = /NOT_FOUND|model not found|unsupported model|is not supported for|no longer available/i.test(rawMsg) || status === 404;
 
@@ -817,9 +827,12 @@ export async function callGeminiWithRetry(
   // Deduplicate candidate models preserving priority order
   const modelsToTry = Array.from(new Set(rawCandidates));
 
-  // Sensible deadlines for AWS EC2 t3.micro environment (2 vCPU, 1 GB RAM)
-  const timeoutMs = options.timeoutMs ?? 6000; // 6s per attempt
-  const totalTimeoutMs = options.totalTimeoutMs ?? 16000; // 16s overall budget
+  // Sensible deadlines for AWS EC2 t3.micro environment (2 vCPU, 1 GB RAM).
+  // Google Gemini SDK enforces a minimum deadline of 10,000 ms per request.
+  // 10,500 ms preferred per attempt; 33,000 ms budget covers 3 × 10.5 s + 1.5 s margin.
+  const GOOGLE_SDK_MINIMUM_TIMEOUT_MS = 10_000; // Google's hard minimum — below this causes HTTP 400
+  const timeoutMs = options.timeoutMs ?? 10_500;  // was 6000 — raised above Google's 10 s minimum
+  const totalTimeoutMs = options.totalTimeoutMs ?? 33_000; // was 16000 — 3 × 10.5 s + 1.5 s margin
   const perModelAttempts = options.perModelAttempts ?? 2;
   const maxAttempts = options.maxAttempts ?? (modelsToTry.length >= 3 ? 5 : modelsToTry.length === 2 ? 3 : 2);
   const baseDelayMs = options.baseDelayMs ?? 600;
@@ -840,17 +853,25 @@ export async function callGeminiWithRetry(
     const isSecondary = mIdx > 0;
 
     for (let modelAttempt = 1; modelAttempt <= perModelAttempts; modelAttempt++) {
-      totalAttempts++;
-
-      // Check remaining overall deadline
+      // Check remaining overall deadline.
+      // We must not start an attempt if there is not enough budget for Google's minimum 10 s deadline.
       const elapsedOverall = Math.round(performance.now() - tOverallStart);
       const remainingOverallMs = totalTimeoutMs - elapsedOverall;
-      if (remainingOverallMs < 800) {
-        break; // Overall budget exhausted
+      if (remainingOverallMs < GOOGLE_SDK_MINIMUM_TIMEOUT_MS) {
+        mIdx = modelsToTry.length; // Exhaust all remaining candidate models — budget is gone
+        break;
       }
 
-      // Per-attempt timeout cannot exceed remaining budget
-      const attemptTimeoutMs = Math.min(timeoutMs, Math.max(remainingOverallMs - 150, 1000));
+      totalAttempts++;
+
+      // Per-attempt SDK timeout:
+      //   • Must be AT LEAST 10,000 ms (Google's hard minimum; below that → HTTP 400)
+      //   • Should not exceed remaining budget (leave 500 ms margin for overhead)
+      //   • Preferred ceiling: timeoutMs (default 10,500 ms)
+      const attemptTimeoutMs = Math.max(
+        GOOGLE_SDK_MINIMUM_TIMEOUT_MS,
+        Math.min(timeoutMs, remainingOverallMs - 500)
+      );
       const controller = new AbortController();
       let timeoutHandle: NodeJS.Timeout | null = null;
       const tAttemptStart = performance.now();
@@ -937,7 +958,7 @@ export async function callGeminiWithRetry(
 
         // Can we retry this same model?
         const canRetrySameModel = modelAttempt < perModelAttempts && parsed.isRetryable && totalAttempts < maxAttempts;
-        const timeAllowsRetry = totalTimeoutMs - (performance.now() - tOverallStart) > 2000;
+        const timeAllowsRetry = totalTimeoutMs - (performance.now() - tOverallStart) > GOOGLE_SDK_MINIMUM_TIMEOUT_MS + 1000;
 
         if (canRetrySameModel && timeAllowsRetry) {
           const delay = calculateBackoff(modelAttempt, parsed.retryAfterMs, baseDelayMs, jitter, maxDelayMs);

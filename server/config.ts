@@ -42,4 +42,10 @@ export const config = {
     (cleanEnv(process.env.GEMINI_SECONDARY_MODEL) || 'gemini-3.5-flash-lite') === 'gemini-3.5-flash'
       ? 'gemini-3.6-flash'
       : 'gemini-3.5-flash'),
+  // Per-attempt SDK timeout passed to GoogleGenAI httpOptions.timeout.
+  // Google enforces a hard minimum of 10,000 ms; values below that cause HTTP 400.
+  geminiSdkTimeoutMs: Number(process.env.GEMINI_SDK_TIMEOUT_MS) || 10_500,
+  // Total deadline budget across all models and retry attempts.
+  // Default: 33,000 ms covers 3 × 10.5 s sequential attempts plus overhead.
+  geminiTotalTimeoutMs: Number(process.env.GEMINI_TOTAL_TIMEOUT_MS) || 33_000,
 };
