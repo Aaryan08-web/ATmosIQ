@@ -30,7 +30,7 @@ import type { AqResult } from '../data/airQuality.js';
 import type { FireResult } from '../data/fires.js';
 
 // ---------------------------------------------------------------------------
-// Shared deterministic providers â€” used in tests that call buildContext so
+// Shared deterministic providers — used in tests that call buildContext so
 // they never make live network requests (keeps tests fast and reproducible).
 // ---------------------------------------------------------------------------
 const MOCK_AQ_RESULT: AqResult = {
@@ -219,7 +219,7 @@ test('Three consecutive 503 failures followed by rule-based fallback: exactly 3 
 
   // Verify that rule-based brief grounded in real context is returned (never invented)
   assert.match(summaryRes.text, /8 fire detections within 150 km/);
-  assert.match(summaryRes.text, /US AQI 175 â€” Unhealthy/);
+  assert.match(summaryRes.text, /US AQI 175\s*[—\u2014\-]\s*Unhealthy/);
   assert.match(summaryRes.text, /Western Ghats Front/);
 
   // Verify only one concise error is logged after all retries are exhausted
@@ -294,7 +294,7 @@ test('Gemini timeout: handles request timeout and falls back to rule-based summa
 test('Fallback response rendered successfully in the frontend', () => {
   const fallbackSummary: AiSummary = {
     summary:
-      '8 fire detections within 150 km in the last 24 hours (combined radiative power 340 MW, strongest 85 MW).\nNearest air-quality reading (Delhi NCR Central, 0 km away): US AQI 175 â€” Unhealthy.\nNearby forest-loss pressure: Western Ghats Front (450 km, Commodity agriculture).',
+      '8 fire detections within 150 km in the last 24 hours (combined radiative power 340 MW, strongest 85 MW).\nNearest air-quality reading (Delhi NCR Central, 0 km away): US AQI 175 — Unhealthy.\nNearby forest-loss pressure: Western Ghats Front (450 km, Commodity agriculture).',
     source: 'rule-based',
     fallback: true,
     fallbackReason: 'service_unavailable',
@@ -347,7 +347,7 @@ test('Fallback response rendered successfully in the frontend', () => {
 
 // Test 7: Location Differentiation for Delhi, Pune, and Sundarbans
 test('Location Differentiation: Delhi, Pune and Sundarbans use actual coordinates and generate distinct summaries', async () => {
-  // Delhi coordinates: 28.6139Â°N, 77.2090Â°E
+  // Delhi coordinates: 28.6139°N, 77.2090°E
   const delhiCtx = await buildContext('Delhi NCR', 28.6139, 77.209, 150, MOCK_PROVIDERS);
   assert.equal(delhiCtx.lat, 28.6139);
   assert.equal(delhiCtx.lon, 77.209);
@@ -355,7 +355,7 @@ test('Location Differentiation: Delhi, Pune and Sundarbans use actual coordinate
   assert.equal(delhiCtx.airQuality?.usAqi, 175);
   assert.equal(delhiCtx.airQuality?.category, 'Unhealthy');
 
-  // Pune coordinates: 18.5204Â°N, 73.8567Â°E
+  // Pune coordinates: 18.5204°N, 73.8567°E
   const puneCtx = await buildContext('Pune & Western Ghats', 18.5204, 73.8567, 150, MOCK_PROVIDERS);
   assert.equal(puneCtx.lat, 18.5204);
   assert.equal(puneCtx.lon, 73.8567);
@@ -363,7 +363,7 @@ test('Location Differentiation: Delhi, Pune and Sundarbans use actual coordinate
   assert.equal(puneCtx.airQuality?.usAqi, 94);
   assert.equal(puneCtx.airQuality?.category, 'Moderate');
 
-  // Sundarbans coordinates: 21.9500Â°N, 88.8500Â°E
+  // Sundarbans coordinates: 21.9500°N, 88.8500°E
   const sundarCtx = await buildContext('Sundarbans Delta', 21.95, 88.85, 150, MOCK_PROVIDERS);
   assert.equal(sundarCtx.lat, 21.95);
   assert.equal(sundarCtx.lon, 88.85);
@@ -375,10 +375,10 @@ test('Location Differentiation: Delhi, Pune and Sundarbans use actual coordinate
   const puneSummary = ruleBasedSummary(puneCtx);
   const sundarSummary = ruleBasedSummary(sundarCtx);
 
-  assert.match(delhiSummary, /US AQI 175 â€” Unhealthy/);
+  assert.match(delhiSummary, /US AQI 175\s*[—\u2014\-]\s*Unhealthy/);
   assert.match(delhiSummary, /Rajaji-Corbett Shivalik/);
 
-  assert.match(puneSummary, /US AQI 94 â€” Moderate/);
+  assert.match(puneSummary, /US AQI 94\s*[—\u2014\-]\s*Moderate/);
   assert.match(puneSummary, /Koyna-Mahabaleshwar/);
 
   assert.match(sundarSummary, /No high-confidence fire detections within 150 km/);
@@ -895,7 +895,7 @@ test('Model discovery and verification gracefully handles errors and redacts cre
   assert.equal(discovered, 'gemini-3.5-flash-lite');
 });
 
-// Test 25: Three-model fallback â€” 1. Primary succeeds
+// Test 25: Three-model fallback — 1. Primary succeeds
 test('Three-model fallback: primary succeeds on attempt 1 without invoking secondary or tertiary', async () => {
   const modelsInvoked: string[] = [];
 
@@ -916,7 +916,7 @@ test('Three-model fallback: primary succeeds on attempt 1 without invoking secon
   assert.deepEqual(modelsInvoked, ['gemini-3.8-flash']);
 });
 
-// Test 26: Three-model fallback â€” 2. Primary fails, secondary succeeds
+// Test 26: Three-model fallback — 2. Primary fails, secondary succeeds
 test('Three-model fallback: primary fails, secondary succeeds without invoking tertiary', async () => {
   const modelsInvoked: string[] = [];
 
@@ -941,7 +941,7 @@ test('Three-model fallback: primary fails, secondary succeeds without invoking t
   assert.deepEqual(modelsInvoked, ['gemini-3.8-flash', 'gemini-3.5-flash-lite']);
 });
 
-// Test 27: Three-model fallback â€” 3. Primary and secondary fail, tertiary succeeds
+// Test 27: Three-model fallback — 3. Primary and secondary fail, tertiary succeeds
 test('Three-model fallback: primary and secondary fail, tertiary succeeds', async () => {
   const modelsInvoked: string[] = [];
   const diagLogs: GeminiDiagnosticLog[] = [];
@@ -980,7 +980,7 @@ test('Three-model fallback: primary and secondary fail, tertiary succeeds', asyn
   assert.equal(diagLogs[0].fallback, false);
 });
 
-// Test 28: Three-model fallback â€” 4. All three fail and rule-based fallback is used
+// Test 28: Three-model fallback — 4. All three fail and rule-based fallback is used
 test('Three-model fallback: all three fail and rule-based fallback is used', async () => {
   const modelsInvoked: string[] = [];
 
@@ -1003,7 +1003,7 @@ test('Three-model fallback: all three fail and rule-based fallback is used', asy
   assert.deepEqual(modelsInvoked, ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.5-flash']);
 });
 
-// Test 29: Three-model fallback â€” 5. Duplicate model IDs are deduplicated and not attempted twice
+// Test 29: Three-model fallback — 5. Duplicate model IDs are deduplicated and not attempted twice
 test('Three-model fallback: duplicate model IDs are deduplicated and not attempted twice', async () => {
   const modelsInvoked: string[] = [];
 
@@ -1028,7 +1028,7 @@ test('Three-model fallback: duplicate model IDs are deduplicated and not attempt
   assert.deepEqual(modelsInvoked, ['gemini-model-A', 'gemini-model-B'], 'Duplicate model-A was NOT attempted twice');
 });
 
-// Test 30: Three-model fallback â€” 6. 404 switches immediately without wasting retries
+// Test 30: Three-model fallback — 6. 404 switches immediately without wasting retries
 test('Three-model fallback: 404 switches immediately across primary and secondary to tertiary', async () => {
   const attempts: Record<string, number> = {
     'gemini-3.8-flash': 0,
@@ -1061,7 +1061,7 @@ test('Three-model fallback: 404 switches immediately across primary and secondar
   assert.equal(summaryRes.model, 'gemini-3.5-flash');
 });
 
-// Test 31: Three-model fallback â€” 7. Total attempts and timeout budget remain strictly bounded
+// Test 31: Three-model fallback — 7. Total attempts and timeout budget remain strictly bounded
 test('Three-model fallback: total attempts and timeout budget remain strictly bounded', async () => {
   let callCount = 0;
   const tStart = performance.now();
@@ -1090,7 +1090,7 @@ test('Three-model fallback: total attempts and timeout budget remain strictly bo
   assert.equal(summaryRes.fallback, true);
 });
 
-// Test 32: Three-model fallback â€” 8. API keys never appear in logs
+// Test 32: Three-model fallback — 8. API keys never appear in logs
 test('Three-model fallback: API keys never appear in logs or diagnostics across all three models', async () => {
   const secretKey = 'AIzaSySecretSuperKeyAcrossThreeModels789';
   const diagLogs: GeminiDiagnosticLog[] = [];
