@@ -158,6 +158,17 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({
     };
   }, [mobileOpen]);
 
+  // Auto-close mobile drawer if viewport expands to desktop breakpoint (>= 768px)
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768 && mobileOpen) {
+        onCloseMobile();
+      }
+    };
+    window.addEventListener('resize', handleResize, { passive: true });
+    return () => window.removeEventListener('resize', handleResize);
+  }, [mobileOpen, onCloseMobile]);
+
   const renderSidebarContent = (isExpanded: boolean, isMobile = false) => (
     <div className="flex flex-col h-full bg-[#0D1914] border-r border-emerald-950/80 text-[#F2F5F2] select-none">
       {/* Header / Brand Row with animated Logo & Toggle */}

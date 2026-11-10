@@ -10,6 +10,7 @@ import { authRouter } from './routes/auth.js';
 import { dataRouter } from './routes/data.js';
 import { adminRouter } from './routes/admin.js';
 import { getGfwSyncStatus } from './data/gfwIngestion.js';
+import { getGeminiStatus, testGeminiConnectivity } from './ai.js';
 
 export function createApp() {
   const app = express();
@@ -24,8 +25,8 @@ export function createApp() {
         useDefaults: true,
         directives: {
           'upgrade-insecure-requests': null, // app may be served over plain HTTP on a bare EC2 instance
-          'img-src': ["'self'", 'data:', 'blob:', 'https://*.basemaps.cartocdn.com', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.org', 'https://*.arcgisonline.com', 'https://server.arcgisonline.com', 'https://raw.githubusercontent.com', 'https://cdn.jsdelivr.net', 'https://cdn.21st.dev', 'https://www.gstatic.com', 'https://images.unsplash.com'],
-          'connect-src': ["'self'", 'data:', 'blob:', 'https://*.basemaps.cartocdn.com', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.org', 'https://*.arcgisonline.com', 'https://server.arcgisonline.com', 'https://nominatim.openstreetmap.org', 'https://cdn.jsdelivr.net', 'https://www.gstatic.com', 'https://cdn.21st.dev'],
+          'img-src': ["'self'", 'data:', 'blob:', 'https://*.basemaps.cartocdn.com', 'https://basemaps.cartocdn.com', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.org', 'https://*.arcgisonline.com', 'https://server.arcgisonline.com', 'https://raw.githubusercontent.com', 'https://cdn.jsdelivr.net', 'https://cdn.21st.dev', 'https://www.gstatic.com', 'https://images.unsplash.com'],
+          'connect-src': ["'self'", 'data:', 'blob:', 'https://*.basemaps.cartocdn.com', 'https://basemaps.cartocdn.com', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.org', 'https://*.arcgisonline.com', 'https://server.arcgisonline.com', 'https://nominatim.openstreetmap.org', 'https://cdn.jsdelivr.net', 'https://www.gstatic.com', 'https://cdn.21st.dev'],
           'worker-src': ["'self'", 'blob:', 'data:'],
           'child-src': ["'self'", 'blob:'],
           'font-src': ["'self'", 'data:', 'https://fonts.gstatic.com', 'https://cdn.21st.dev'],
@@ -38,8 +39,15 @@ export function createApp() {
   app.use(express.json({ limit: '20kb' }));
   app.use(cookieParser());
 
-  app.get('/api/health', (_req, res) => {
+  app.get('/api/health', async (req, res) => {
     const gfw = getGfwSyncStatus();
+    const geminiStatus = getGeminiStatus();
+
+    let liveGeminiTest = undefined;
+    if (req.query.test === 'gemini') {
+      liveGeminiTest = await testGeminiConnectivity();
+    }
+
     res.json({
       ok: true,
       time: new Date().toISOString(),
@@ -66,7 +74,13 @@ export function createApp() {
         gemini: {
           configured: !!config.geminiKey,
           model: config.geminiModel,
-          status: config.geminiKey ? 'active' : 'unconfigured',
+          status: geminiStatus.status,
+          lastSuccessAt: geminiStatus.lastSuccessAt,
+          lastErrorAt: geminiStatus.lastErrorAt,
+          lastErrorMessage: geminiStatus.lastErrorMessage,
+          lastHttpStatus: geminiStatus.lastHttpStatus,
+          testedAt: geminiStatus.testedAt,
+          ...(liveGeminiTest ? { liveTest: liveGeminiTest } : {}),
         },
       },
     });

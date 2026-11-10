@@ -61,6 +61,14 @@ export function PlacePanel({ place, fires, forest }: PlacePanelProps) {
       return;
     }
 
+    // Sovereign India geographic boundary check (6.5°N - 37.5°N, 68.0°E - 97.5°E)
+    if (place.lat < 6.5 || place.lat > 37.5 || place.lon < 68.0 || place.lon > 97.5) {
+      setPointAq(null);
+      setAqError('Target coordinates fall outside the Republic of India. Please select an observation location within Indian sovereign territory.');
+      setAqLoading(false);
+      return;
+    }
+
     const cacheKey = `${place.lat.toFixed(2)}:${place.lon.toFixed(2)}`;
     const cached = pointAqCache.get(cacheKey);
     if (cached && cached.expires > Date.now()) {
@@ -176,13 +184,17 @@ export function PlacePanel({ place, fires, forest }: PlacePanelProps) {
     return { label: 'Normal Risk', variant: 'bg-emerald-950/80 text-emerald-300 border-emerald-800/70' };
   })();
 
-  const analyse = async () => {
+  const analyse = async (bypassCache = false) => {
+    if (place.lat < 6.5 || place.lat > 37.5 || place.lon < 68.0 || place.lon > 97.5) {
+      setErrorAi('Coordinates fall outside Indian sovereign territory.');
+      return;
+    }
     setLoadingAi(true);
     setErrorAi(null);
     try {
       const res = await api<AiSummary>('/ai/summary', {
         method: 'POST',
-        json: { name: place.name, lat: place.lat, lon: place.lon },
+        json: { name: place.name, lat: place.lat, lon: place.lon, bypassCache },
       });
       setSummary(res);
     } catch (e) {
@@ -430,7 +442,7 @@ export function PlacePanel({ place, fires, forest }: PlacePanelProps) {
       <div className="space-y-3 pt-1">
         <button
           type="button"
-          onClick={analyse}
+          onClick={() => analyse()}
           disabled={loadingAi}
           className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#174C34] to-[#1F6244] hover:from-[#1F6244] hover:to-[#2E8B57] disabled:opacity-60 disabled:cursor-wait border border-emerald-500/50 hover:border-emerald-400 text-xs sm:text-sm font-semibold text-[#F2F5F2] transition-all duration-200 cursor-pointer shadow-md shadow-emerald-950/50"
         >
@@ -519,7 +531,7 @@ export function PlacePanel({ place, fires, forest }: PlacePanelProps) {
                   </div>
                   <button
                     type="button"
-                    onClick={analyse}
+                    onClick={() => analyse(true)}
                     disabled={loadingAi}
                     className="text-amber-300 hover:text-amber-100 font-semibold underline text-[10px] cursor-pointer"
                   >

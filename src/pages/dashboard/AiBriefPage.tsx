@@ -78,7 +78,7 @@ export const AiBriefPage: React.FC<AiBriefPageProps> = ({ initialSummary = null,
     },
   ];
 
-  const handleGenerateBrief = useCallback(async () => {
+  const handleGenerateBrief = useCallback(async (bypassCache = false) => {
     if (loading || inFlightRef.current) return;
     inFlightRef.current = true;
     setLoading(true);
@@ -86,7 +86,7 @@ export const AiBriefPage: React.FC<AiBriefPageProps> = ({ initialSummary = null,
     try {
       const res = await api<AiSummary>('/ai/summary', {
         method: 'POST',
-        json: { name: place.name, lat: place.lat, lon: place.lon },
+        json: { name: place.name, lat: place.lat, lon: place.lon, bypassCache },
       });
       setSummary(res);
     } catch (e: unknown) {
@@ -168,7 +168,7 @@ export const AiBriefPage: React.FC<AiBriefPageProps> = ({ initialSummary = null,
 
           <button
             type="button"
-            onClick={handleGenerateBrief}
+            onClick={() => handleGenerateBrief(true)}
             disabled={loading}
             className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-[#174C34] to-[#1F6244] hover:from-[#1F6244] hover:to-[#2E8B57] disabled:opacity-60 text-xs sm:text-sm font-bold text-[#F2F5F2] border border-emerald-500/60 shadow-md shadow-emerald-950/50 flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0"
           >
@@ -200,7 +200,7 @@ export const AiBriefPage: React.FC<AiBriefPageProps> = ({ initialSummary = null,
           </div>
           <button
             type="button"
-            onClick={handleGenerateBrief}
+            onClick={() => handleGenerateBrief(true)}
             disabled={loading}
             className="px-3 py-1.5 rounded-lg bg-amber-900/60 hover:bg-amber-800/80 text-amber-100 border border-amber-700/60 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shrink-0 transition-colors disabled:opacity-50"
           >

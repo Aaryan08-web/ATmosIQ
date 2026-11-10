@@ -88,7 +88,7 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={() => {
-            if (typeof window !== 'undefined' && window.innerWidth < 768) {
+            if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
               onOpenMobileSidebar();
             } else if (onToggleCollapse) {
               onToggleCollapse();

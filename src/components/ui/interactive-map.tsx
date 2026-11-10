@@ -28,6 +28,14 @@ L.Icon.Default.mergeOptions({
     "https://cdn.21st.dev/assets/mirror/26/264f5c640339f042dd729062cfc04c17f8ea0f29882b538e3848ed8f10edb4da.png",
 });
 
+const DEFAULT_TILE_URL =
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_MAP_TILE_URL) ||
+  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+
+const DEFAULT_TILE_ATTRIBUTION =
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_MAP_TILE_ATTRIBUTION) ||
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
 export interface MapMarkerPopup {
   title?: string;
   content?: string;
@@ -641,12 +649,19 @@ export const AdvancedMap: React.FC<AdvancedMapProps> = ({
     );
   }, [onMapClick]);
 
-  // Handle map click
+  // Handle map click with India sovereign boundary guard
   const handleMapClickInternal = useCallback(
     (latlng: L.LatLng) => {
-      setClickedLocation({ lat: latlng.lat, lng: latlng.lng });
+      const lat = latlng.lat;
+      const lon = latlng.lng;
+      if (lat < 6.5 || lat > 37.5 || lon < 68.0 || lon > 97.5) {
+        setLocateError(`Coordinates (${lat.toFixed(2)}°, ${lon.toFixed(2)}°) are outside India. ATmosIQ monitors sovereign Indian territory.`);
+        setTimeout(() => setLocateError(null), 4000);
+        return;
+      }
+      setClickedLocation({ lat, lng: lon });
       if (onMapClick) {
-        onMapClick({ lat: latlng.lat, lon: latlng.lng, lng: latlng.lng });
+        onMapClick({ lat, lon, lng: lon });
       }
     },
     [onMapClick]
@@ -742,8 +757,10 @@ export const AdvancedMap: React.FC<AdvancedMapProps> = ({
         {/* Base tile layers */}
         {currentLayers.openstreetmap && (
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution={DEFAULT_TILE_ATTRIBUTION}
+            url={DEFAULT_TILE_URL}
+            subdomains="abcd"
+            maxZoom={19}
           />
         )}
 

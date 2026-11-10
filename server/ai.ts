@@ -82,6 +82,162 @@ export interface CachedAiSummaryPayload {
   timing: AiSummaryTiming;
 }
 
+export interface GeminiProviderStatus {
+  configured: boolean;
+  model: string;
+  status: 'active' | 'degraded' | 'invalid_key' | 'model_not_found' | 'unconfigured' | 'configured' | 'error';
+  lastSuccessAt: string | null;
+  lastErrorAt: string | null;
+  lastErrorMessage: string | null;
+  lastHttpStatus: number | null;
+  testedAt: string | null;
+}
+
+let currentGeminiStatus: GeminiProviderStatus = {
+  configured: !!config.geminiKey,
+  model: config.geminiModel,
+  status: config.geminiKey ? 'configured' : 'unconfigured',
+  lastSuccessAt: null,
+  lastErrorAt: null,
+  lastErrorMessage: null,
+  lastHttpStatus: null,
+  testedAt: null,
+};
+
+export function getGeminiStatus(): GeminiProviderStatus {
+  currentGeminiStatus.configured = !!config.geminiKey;
+  currentGeminiStatus.model = config.geminiModel;
+  if (!config.geminiKey) {
+    currentGeminiStatus.status = 'unconfigured';
+  } else if (currentGeminiStatus.status === 'unconfigured') {
+    currentGeminiStatus.status = 'configured';
+  }
+  return { ...currentGeminiStatus };
+}
+
+export function updateGeminiProviderStatus(updates: Partial<GeminiProviderStatus>): GeminiProviderStatus {
+  currentGeminiStatus = {
+    ...currentGeminiStatus,
+    ...updates,
+    configured: !!config.geminiKey,
+    model: updates.model || config.geminiModel,
+  };
+  return { ...currentGeminiStatus };
+}
+
+/**
+ * Diagnostic utility that tests real Gemini connectivity using the configured credentials.
+ * Does not expose API keys or secrets in logs or responses.
+ */
+export async function testGeminiConnectivity(apiKey?: string, model?: string): Promise<{
+  ok: boolean;
+  status: 'active' | 'invalid_key' | 'model_not_found' | 'degraded' | 'unconfigured' | 'error';
+  message: string;
+  model: string;
+  latencyMs: number;
+}> {
+  const key = apiKey || config.geminiKey;
+  if (!key) {
+    updateGeminiProviderStatus({
+      status: 'unconfigured',
+      lastErrorMessage: 'No GEMINI_API_KEY configured in environment.',
+      testedAt: new Date().toISOString(),
+    });
+    return {
+      ok: false,
+      status: 'unconfigured',
+      message: 'No GEMINI_API_KEY configured in environment.',
+      model: model || config.geminiModel,
+      latencyMs: 0,
+    };
+  }
+
+  const selectedModel = model || config.geminiModel;
+  const t0 = performance.now();
+  try {
+    const ai = new GoogleGenAI({ apiKey: key, httpOptions: { timeout: 10000 } });
+    const res = await ai.models.generateContent({
+      model: selectedModel,
+      contents: 'Respond with the single word OK.',
+    });
+    const latencyMs = Math.round(performance.now() - t0);
+    const text = res?.text?.trim() || '';
+    if (text) {
+      updateGeminiProviderStatus({
+        status: 'active',
+        lastSuccessAt: new Date().toISOString(),
+        lastErrorMessage: null,
+        lastHttpStatus: 200,
+        testedAt: new Date().toISOString(),
+      });
+      return {
+        ok: true,
+        status: 'active',
+        message: `Successfully connected to Google Gemini using model '${selectedModel}' (${latencyMs}ms).`,
+        model: selectedModel,
+        latencyMs,
+      };
+    }
+    throw new Error('Gemini returned an empty response.');
+  } catch (err) {
+    const latencyMs = Math.round(performance.now() - t0);
+    const parsed = parseGeminiError(err, key);
+    if (parsed.status === 404 && selectedModel !== 'gemini-2.5-flash') {
+      try {
+        const aiFallback = new GoogleGenAI({ apiKey: key, httpOptions: { timeout: 10000 } });
+        const resFallback = await aiFallback.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: 'Respond with the single word OK.',
+        });
+        const latencyMsFallback = Math.round(performance.now() - t0);
+        if (resFallback?.text?.trim()) {
+          updateGeminiProviderStatus({
+            status: 'active',
+            lastSuccessAt: new Date().toISOString(),
+            lastErrorMessage: null,
+            lastHttpStatus: 200,
+            testedAt: new Date().toISOString(),
+          });
+          return {
+            ok: true,
+            status: 'active',
+            message: `Model '${selectedModel}' not found, but fallback 'gemini-2.5-flash' connected successfully (${latencyMsFallback}ms).`,
+            model: 'gemini-2.5-flash',
+            latencyMs: latencyMsFallback,
+          };
+        }
+      } catch {
+        // Fall through to report original error
+      }
+    }
+
+    let status: 'invalid_key' | 'model_not_found' | 'degraded' | 'error' = 'error';
+    if (parsed.status === 401 || /API_KEY_INVALID|invalid api key|api key not valid/i.test(parsed.message)) {
+      status = 'invalid_key';
+    } else if (parsed.status === 404 || /not found|unsupported model/i.test(parsed.message)) {
+      status = 'model_not_found';
+    } else if (parsed.status === 503 || parsed.status === 504 || parsed.status === 429) {
+      status = 'degraded';
+    }
+
+    updateGeminiProviderStatus({
+      status,
+      lastErrorAt: new Date().toISOString(),
+      lastErrorMessage: parsed.message,
+      lastHttpStatus: parsed.status,
+      testedAt: new Date().toISOString(),
+    });
+
+    return {
+      ok: false,
+      status,
+      message: parsed.message,
+      model: selectedModel,
+      latencyMs,
+    };
+  }
+}
+
 const aiSummaryCacheStore = new Map<string, { value: CachedAiSummaryPayload; expiresAt: number }>();
 
 export function buildAiSummaryCacheKey(params: {
@@ -356,7 +512,7 @@ export async function callGeminiWithRetry(
     throw new Error('No Gemini API key configured.');
   }
 
-  const model = options.model || config.geminiModel;
+  let activeModel = options.model || config.geminiModel;
   const maxAttempts = options.maxAttempts ?? 3;
   const baseDelayMs = options.baseDelayMs ?? 1000;
   const maxDelayMs = options.maxDelayMs ?? 10000;
@@ -368,6 +524,7 @@ export async function callGeminiWithRetry(
   let lastParsedError: ParsedGeminiError | null = null;
   let totalGeminiMs = 0;
   let totalBackoffMs = 0;
+  let modelFallbackAttempted = false;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const controller = new AbortController();
@@ -376,11 +533,11 @@ export async function callGeminiWithRetry(
 
     try {
       const runnerPromise = options.runner
-        ? options.runner({ model, contents: prompt, signal: controller.signal })
+        ? options.runner({ model: activeModel, contents: prompt, signal: controller.signal })
         : (async () => {
             // SDK timeout cancellation aborts the underlying HTTP request via httpOptions
             const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: timeoutMs } });
-            return ai.models.generateContent({ model, contents: prompt });
+            return ai.models.generateContent({ model: activeModel, contents: prompt });
           })();
 
       const timeoutPromise = new Promise<never>((_, reject) => {
@@ -402,12 +559,35 @@ export async function callGeminiWithRetry(
         throw new Error('Gemini returned an empty response.');
       }
 
+      if (!options.runner) {
+        updateGeminiProviderStatus({
+          status: 'active',
+          lastSuccessAt: new Date().toISOString(),
+          lastErrorMessage: null,
+          lastHttpStatus: 200,
+          testedAt: new Date().toISOString(),
+        });
+      }
+
       return { text, attempts: attempt, geminiMs: totalGeminiMs, backoffMs: totalBackoffMs };
     } catch (rawErr) {
       if (timeoutHandle) clearTimeout(timeoutHandle);
       totalGeminiMs += Math.round(performance.now() - tAttemptStart);
       const parsed = parseGeminiError(rawErr, apiKey);
       lastParsedError = parsed;
+
+      // Model fallback check: if 404/not found and not using mock runner, attempt gemini-2.5-flash
+      if (
+        !options.runner &&
+        !modelFallbackAttempted &&
+        (parsed.status === 404 || /not found|unsupported model/i.test(parsed.message)) &&
+        activeModel !== 'gemini-2.5-flash'
+      ) {
+        modelFallbackAttempted = true;
+        console.warn(`[ai] Configured model '${activeModel}' not found. Retrying with 'gemini-2.5-flash'...`);
+        activeModel = 'gemini-2.5-flash';
+        continue;
+      }
 
       // Do NOT retry non-retryable errors or if maximum attempts reached
       if (!parsed.isRetryable || attempt >= maxAttempts) {
@@ -426,6 +606,24 @@ export async function callGeminiWithRetry(
   const finalStatus = lastParsedError?.status || 503;
   const finalMessage = lastParsedError?.message || 'Gemini service unavailable after retries.';
   logConciseError('gemini', finalStatus, finalMessage, options.logger);
+
+  if (!options.runner) {
+    let stat: 'invalid_key' | 'model_not_found' | 'degraded' | 'error' = 'error';
+    if (finalStatus === 401 || /API_KEY_INVALID|invalid api key|api key not valid/i.test(finalMessage)) {
+      stat = 'invalid_key';
+    } else if (finalStatus === 404 || /not found|unsupported model/i.test(finalMessage)) {
+      stat = 'model_not_found';
+    } else if (finalStatus === 503 || finalStatus === 504 || finalStatus === 429) {
+      stat = 'degraded';
+    }
+    updateGeminiProviderStatus({
+      status: stat,
+      lastErrorAt: new Date().toISOString(),
+      lastErrorMessage: finalMessage,
+      lastHttpStatus: typeof finalStatus === 'number' ? finalStatus : 500,
+      testedAt: new Date().toISOString(),
+    });
+  }
 
   const finalError = new Error(finalMessage) as Error & {
     status: number;

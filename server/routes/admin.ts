@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../db.js';
 import { requireAuth, requireRole } from './auth.js';
 import { getGfwSyncStatus } from '../data/gfwIngestion.js';
+import { testGeminiConnectivity, getGeminiStatus } from '../ai.js';
 
 export const adminRouter = Router();
 
@@ -51,6 +52,24 @@ adminRouter.get('/stats', requireAuth, requireRole('admin'), (_req, res) => {
     snapshots: snapshotCount,
     gfwAlerts: gfwAlertCount,
     gfwSync: gfwStatus,
+    geminiStatus: getGeminiStatus(),
     timestamp: new Date().toISOString(),
   });
+});
+
+/** Admin-only: run a live, safe diagnostic connectivity test to Gemini. */
+adminRouter.post('/diagnostics/gemini', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const result = await testGeminiConnectivity(
+      req.body?.key,
+      req.body?.model
+    );
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      status: 'error',
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
 });

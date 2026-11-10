@@ -420,7 +420,10 @@ dataRouter.post('/ai/summary', requireAuth, aiLimiter, async (req, res) => {
       timing,
     };
 
-    setCachedAiSummary(cacheKey, responsePayload);
+    // Only cache successful Gemini AI responses; never cache fallback responses so retries can succeed immediately
+    if (!out.fallback && out.source === 'gemini') {
+      setCachedAiSummary(cacheKey, responsePayload);
+    }
     res.json(responsePayload);
   } catch (err) {
     console.error('[ai]', err instanceof Error ? err.message : err);
