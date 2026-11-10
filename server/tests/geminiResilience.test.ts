@@ -19,6 +19,7 @@ import {
   clearAiSummaryCache,
   type AreaContext,
   type BuildContextProviders,
+  type GeminiDiagnosticLog,
 } from '../ai.js';
 import type { AiSummary } from '../../src/types.js';
 import type { AqResult } from '../data/airQuality.js';
@@ -568,3 +569,220 @@ test('Rule-based summary distinguishes unavailable data from zero detected event
   assert.match(noneNearbySummary, /No monitored city with an air-quality reading within 500 km/);
   assert.doesNotMatch(noneNearbySummary, /temporarily unavailable/);
 });
+
+// Test 15: Primary model success returns primary model metadata and diagnostic log
+test('Multi-model: primary model succeeds without invoking secondary model', async () => {
+  const diagLogs: GeminiDiagnosticLog[] = [];
+  const calls: string[] = [];
+
+  const summaryRes = await summarise(mockContext, {
+    apiKey: 'test-valid-key',
+    model: 'gemini-3.8-flash',
+    secondaryModel: 'gemini-2.5-flash',
+    runner: async ({ model }) => {
+      calls.push(model);
+      return { text: 'Primary model generated environmental brief.' };
+    },
+    diagnosticLogger: (log) => diagLogs.push(log),
+  });
+
+  assert.equal(summaryRes.source, 'gemini');
+  assert.equal(summaryRes.model, 'gemini-3.8-flash');
+  assert.equal(summaryRes.isSecondary, false);
+  assert.deepEqual(summaryRes.modelsAttempted, ['gemini-3.8-flash']);
+  assert.equal(summaryRes.fallback, undefined);
+  assert.deepEqual(calls, ['gemini-3.8-flash']);
+
+  assert.equal(diagLogs.length, 1);
+  assert.equal(diagLogs[0].selectedModel, 'gemini-3.8-flash');
+  assert.equal(diagLogs[0].fallback, false);
+  assert.equal(diagLogs[0].httpStatus, 200);
+});
+
+// Test 16: Primary model fails with 503 and switches to secondary model successfully
+test('Multi-model: primary 503 switches to secondary model and succeeds', async () => {
+  const diagLogs: GeminiDiagnosticLog[] = [];
+  const calls: { model: string; attempt: number }[] = [];
+  let attempt = 0;
+
+  const summaryRes = await summarise(mockContext, {
+    apiKey: 'test-valid-key',
+    model: 'gemini-3.8-flash',
+    secondaryModel: 'gemini-2.5-flash',
+    perModelAttempts: 1, // trigger model switch on first failure
+    maxAttempts: 3,
+    baseDelayMs: 1,
+    jitter: false,
+    sleep: async () => {},
+    runner: async ({ model }) => {
+      attempt++;
+      calls.push({ model, attempt });
+      if (model === 'gemini-3.8-flash') {
+        throw createMock503Error('503 UNAVAILABLE: gemini-3.8-flash experiencing high demand');
+      }
+      return { text: 'Secondary gemini-2.5-flash generated environmental brief.' };
+    },
+    diagnosticLogger: (log) => diagLogs.push(log),
+  });
+
+  assert.equal(summaryRes.source, 'gemini');
+  assert.equal(summaryRes.model, 'gemini-2.5-flash');
+  assert.equal(summaryRes.isSecondary, true);
+  assert.deepEqual(summaryRes.modelsAttempted, ['gemini-3.8-flash', 'gemini-2.5-flash']);
+  assert.match(summaryRes.text, /Secondary gemini-2.5-flash generated/);
+
+  assert.equal(diagLogs.length, 1);
+  assert.equal(diagLogs[0].selectedModel, 'gemini-2.5-flash');
+  assert.equal(diagLogs[0].primaryModel, 'gemini-3.8-flash');
+  assert.equal(diagLogs[0].secondaryModel, 'gemini-2.5-flash');
+  assert.equal(diagLogs[0].fallback, false);
+  assert.equal(diagLogs[0].httpStatus, 200);
+});
+
+// Test 17: Primary model 504 deadline exceeded switches to secondary model and succeeds
+test('Multi-model: primary 504 DEADLINE_EXCEEDED switches to secondary model and succeeds', async () => {
+  const diagLogs: GeminiDiagnosticLog[] = [];
+  const calls: string[] = [];
+
+  const summaryRes = await summarise(mockContext, {
+    apiKey: 'test-valid-key',
+    model: 'gemini-3.8-flash',
+    secondaryModel: 'gemini-2.5-flash',
+    perModelAttempts: 1,
+    maxAttempts: 3,
+    baseDelayMs: 1,
+    jitter: false,
+    sleep: async () => {},
+    runner: async ({ model }) => {
+      calls.push(model);
+      if (model === 'gemini-3.8-flash') {
+        const err = new Error('504 Gateway Timeout: DEADLINE_EXCEEDED');
+        (err as unknown as { status: number }).status = 504;
+        throw err;
+      }
+      return { text: 'Secondary gemini-2.5-flash generated brief after 504.' };
+    },
+    diagnosticLogger: (log) => diagLogs.push(log),
+  });
+
+  assert.equal(summaryRes.source, 'gemini');
+  assert.equal(summaryRes.model, 'gemini-2.5-flash');
+  assert.equal(summaryRes.isSecondary, true);
+  assert.deepEqual(summaryRes.modelsAttempted, ['gemini-3.8-flash', 'gemini-2.5-flash']);
+  assert.equal(diagLogs[0].selectedModel, 'gemini-2.5-flash');
+  assert.equal(diagLogs[0].httpStatus, 200);
+});
+
+// Test 18: Quota exhaustion (429) switches model; when both fail with 429, falls back with quota_exhausted
+test('Multi-model: quota exhaustion (429) on primary recovers on secondary; both failing sets quota_exhausted', async () => {
+  // Sub-case A: Primary 429, secondary succeeds
+  const recoveryRes = await summarise(mockContext, {
+    apiKey: 'test-valid-key',
+    model: 'gemini-3.8-flash',
+    secondaryModel: 'gemini-2.5-flash',
+    perModelAttempts: 1,
+    maxAttempts: 3,
+    baseDelayMs: 1,
+    jitter: false,
+    sleep: async () => {},
+    runner: async ({ model }) => {
+      if (model === 'gemini-3.8-flash') {
+        const err = new Error('429 RESOURCE_EXHAUSTED: Quota exceeded for gemini-3.8-flash');
+        (err as unknown as { status: number }).status = 429;
+        throw err;
+      }
+      return { text: 'Secondary recovered after 429.' };
+    },
+  });
+
+  assert.equal(recoveryRes.source, 'gemini');
+  assert.equal(recoveryRes.model, 'gemini-2.5-flash');
+  assert.equal(recoveryRes.isSecondary, true);
+
+  // Sub-case B: Both models fail with 429 -> clean rule-based fallback with quota_exhausted
+  const diagLogs: GeminiDiagnosticLog[] = [];
+  const fallbackRes = await summarise(mockContext, {
+    apiKey: 'test-valid-key',
+    model: 'gemini-3.8-flash',
+    secondaryModel: 'gemini-2.5-flash',
+    perModelAttempts: 1,
+    maxAttempts: 2,
+    baseDelayMs: 1,
+    jitter: false,
+    sleep: async () => {},
+    runner: async () => {
+      const err = new Error('429 RESOURCE_EXHAUSTED: Rate limit reached');
+      (err as unknown as { status: number }).status = 429;
+      throw err;
+    },
+    diagnosticLogger: (log) => diagLogs.push(log),
+  });
+
+  assert.equal(fallbackRes.source, 'rule-based');
+  assert.equal(fallbackRes.fallback, true);
+  assert.equal(fallbackRes.fallbackReason, 'quota_exhausted');
+  assert.equal(diagLogs.length, 1);
+  assert.equal(diagLogs[0].fallbackReason, 'quota_exhausted');
+  assert.equal(diagLogs[0].httpStatus, 429);
+});
+
+// Test 19: Both models fail -> strictly bounded attempts (<= 3) and clean rule-based fallback
+test('Multi-model: both models fail -> bounded attempts (<= 3) and rule-based fallback', async () => {
+  let callCount = 0;
+  const modelsCalled: string[] = [];
+  const loggedErrors: string[] = [];
+
+  const fallbackRes = await summarise(mockContext, {
+    apiKey: 'test-valid-key',
+    model: 'gemini-3.8-flash',
+    secondaryModel: 'gemini-2.5-flash',
+    perModelAttempts: 2,
+    maxAttempts: 3,
+    baseDelayMs: 1,
+    jitter: false,
+    sleep: async () => {},
+    runner: async ({ model }) => {
+      callCount++;
+      modelsCalled.push(model);
+      throw createMock503Error(`503 High load on ${model}`);
+    },
+    logger: (msg) => loggedErrors.push(msg),
+  });
+
+  assert.equal(callCount, 3, 'Must stop at exactly maxAttempts=3');
+  assert.equal(fallbackRes.source, 'rule-based');
+  assert.equal(fallbackRes.fallback, true);
+  assert.equal(fallbackRes.fallbackReason, 'service_unavailable');
+  assert.deepEqual(fallbackRes.modelsAttempted, ['gemini-3.8-flash', 'gemini-2.5-flash']);
+  assert.equal(loggedErrors.length, 1, 'Only one error logged after exhausting retries');
+});
+
+// Test 20: Structured diagnostic logs and error sanitization never leak API keys
+test('Structured diagnostic logs never expose API keys or secrets', async () => {
+  const sensitiveKey = 'AIzaSySecretProductionCredential987';
+  const capturedLogs: GeminiDiagnosticLog[] = [];
+
+  await summarise(mockContext, {
+    apiKey: sensitiveKey,
+    model: 'gemini-3.8-flash',
+    secondaryModel: 'gemini-2.5-flash',
+    maxAttempts: 1,
+    runner: async () => {
+      const err = new Error(`Authentication failure with key=${sensitiveKey}`);
+      (err as unknown as { status: number }).status = 401;
+      throw err;
+    },
+    diagnosticLogger: (log) => capturedLogs.push(log),
+  });
+
+  assert.equal(capturedLogs.length, 1);
+  const log = capturedLogs[0];
+  assert.equal(log.fallbackReason, 'invalid_key');
+  assert.equal(log.httpStatus, 401);
+
+  // Check all string fields of the diagnostic log for key leak
+  const serialized = JSON.stringify(log);
+  assert.doesNotMatch(serialized, new RegExp(sensitiveKey), 'API key must NEVER be in diagnostic log');
+  assert.match(log.errorMessage || '', /\[REDACTED\]/);
+});
+

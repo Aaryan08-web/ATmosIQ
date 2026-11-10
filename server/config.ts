@@ -31,4 +31,9 @@ export const config = {
     .filter(Boolean),
   geminiKey: cleanEnv(process.env.GEMINI_API_KEY),
   geminiModel: cleanEnv(process.env.GEMINI_MODEL) || 'gemini-3.8-flash',
+  geminiSecondaryModel:
+    cleanEnv(process.env.GEMINI_SECONDARY_MODEL) ||
+    ((cleanEnv(process.env.GEMINI_MODEL) || 'gemini-3.8-flash') === 'gemini-2.5-flash'
+      ? 'gemini-2.0-flash'
+      : 'gemini-2.5-flash'),
 };

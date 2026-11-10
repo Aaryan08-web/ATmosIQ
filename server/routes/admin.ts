@@ -62,7 +62,8 @@ adminRouter.post('/diagnostics/gemini', requireAuth, requireRole('admin'), async
   try {
     const result = await testGeminiConnectivity(
       req.body?.key,
-      req.body?.model
+      req.body?.model,
+      req.body?.secondaryModel
     );
     res.json(result);
   } catch (err) {

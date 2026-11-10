@@ -401,7 +401,7 @@ dataRouter.post('/ai/summary', requireAuth, aiLimiter, async (req, res) => {
     };
 
     console.log(
-      `[ai-perf] Location: "${sanitizeErrorDetails(parsed.data.name)}" | Total: ${totalMs}ms | Data: ${dataRetrievalMs}ms | Gemini: ${timing.geminiMs}ms | Backoff: ${timing.backoffMs}ms | Fallback: ${timing.fallbackMs}ms | Source: ${out.source} | Cached: false`
+      `[ai-perf] Location: "${sanitizeErrorDetails(parsed.data.name)}" | Total: ${totalMs}ms | Data: ${dataRetrievalMs}ms | Gemini: ${timing.geminiMs}ms | Backoff: ${timing.backoffMs}ms | Fallback: ${timing.fallbackMs}ms | Source: ${out.source} | Model: ${out.model || 'none'} | Cached: false`
     );
 
     res.setHeader(
@@ -414,6 +414,7 @@ dataRouter.post('/ai/summary', requireAuth, aiLimiter, async (req, res) => {
       source: out.source,
       fallback: !!out.fallback,
       fallbackReason: out.fallbackReason,
+      model: out.model,
       context: ctx,
       generatedAt: new Date().toISOString(),
       cacheKey,

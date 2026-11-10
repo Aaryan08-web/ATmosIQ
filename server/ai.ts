@@ -33,8 +33,11 @@ export interface SummariseResult {
   text: string;
   source: 'gemini' | 'rule-based';
   fallback?: boolean;
-  fallbackReason?: 'service_unavailable' | 'timeout' | 'invalid_key' | 'error' | 'no_key';
+  fallbackReason?: 'service_unavailable' | 'timeout' | 'invalid_key' | 'quota_exhausted' | 'error' | 'no_key';
   attempts?: number;
+  model?: string;
+  isSecondary?: boolean;
+  modelsAttempted?: string[];
   timing?: {
     geminiMs: number;
     backoffMs: number;
@@ -49,17 +52,40 @@ export interface ParsedGeminiError {
   retryAfterMs?: number;
 }
 
+export interface GeminiDiagnosticLog {
+  timestamp: string;
+  location: string;
+  source: 'gemini' | 'rule-based';
+  selectedModel?: string;
+  primaryModel: string;
+  secondaryModel?: string;
+  modelsAttempted: string[];
+  httpStatus: number;
+  attempts: number;
+  totalMs: number;
+  geminiMs: number;
+  backoffMs: number;
+  fallbackMs: number;
+  fallback: boolean;
+  fallbackReason?: string;
+  errorMessage?: string;
+}
+
 export interface GeminiRetryOptions {
   apiKey?: string;
   model?: string;
+  secondaryModel?: string;
   maxAttempts?: number;
+  perModelAttempts?: number;
   baseDelayMs?: number;
   maxDelayMs?: number;
   timeoutMs?: number;
+  totalTimeoutMs?: number;
   jitter?: boolean;
   runner?: (params: { model: string; contents: string; signal?: AbortSignal }) => Promise<{ text?: string | null }>;
   sleep?: (ms: number) => Promise<void>;
   logger?: (msg: string) => void;
+  diagnosticLogger?: (log: GeminiDiagnosticLog) => void;
 }
 
 export interface AiSummaryTiming {
@@ -76,6 +102,7 @@ export interface CachedAiSummaryPayload {
   source: 'gemini' | 'rule-based';
   fallback: boolean;
   fallbackReason?: string;
+  model?: string;
   context: AreaContext;
   generatedAt: string;
   cacheKey: string;
@@ -85,6 +112,7 @@ export interface CachedAiSummaryPayload {
 export interface GeminiProviderStatus {
   configured: boolean;
   model: string;
+  secondaryModel?: string;
   status: 'active' | 'degraded' | 'invalid_key' | 'model_not_found' | 'unconfigured' | 'configured' | 'error';
   lastSuccessAt: string | null;
   lastErrorAt: string | null;
@@ -96,6 +124,7 @@ export interface GeminiProviderStatus {
 let currentGeminiStatus: GeminiProviderStatus = {
   configured: !!config.geminiKey,
   model: config.geminiModel,
+  secondaryModel: config.geminiSecondaryModel,
   status: config.geminiKey ? 'configured' : 'unconfigured',
   lastSuccessAt: null,
   lastErrorAt: null,
@@ -107,6 +136,7 @@ let currentGeminiStatus: GeminiProviderStatus = {
 export function getGeminiStatus(): GeminiProviderStatus {
   currentGeminiStatus.configured = !!config.geminiKey;
   currentGeminiStatus.model = config.geminiModel;
+  currentGeminiStatus.secondaryModel = config.geminiSecondaryModel;
   if (!config.geminiKey) {
     currentGeminiStatus.status = 'unconfigured';
   } else if (currentGeminiStatus.status === 'unconfigured') {
@@ -121,15 +151,21 @@ export function updateGeminiProviderStatus(updates: Partial<GeminiProviderStatus
     ...updates,
     configured: !!config.geminiKey,
     model: updates.model || config.geminiModel,
+    secondaryModel: updates.secondaryModel || config.geminiSecondaryModel,
   };
   return { ...currentGeminiStatus };
 }
 
 /**
  * Diagnostic utility that tests real Gemini connectivity using the configured credentials.
+ * Tests primary model, and falls back to testing secondary model if primary fails.
  * Does not expose API keys or secrets in logs or responses.
  */
-export async function testGeminiConnectivity(apiKey?: string, model?: string): Promise<{
+export async function testGeminiConnectivity(
+  apiKey?: string,
+  model?: string,
+  secondaryModel?: string
+): Promise<{
   ok: boolean;
   status: 'active' | 'invalid_key' | 'model_not_found' | 'degraded' | 'unconfigured' | 'error';
   message: string;
@@ -137,6 +173,9 @@ export async function testGeminiConnectivity(apiKey?: string, model?: string): P
   latencyMs: number;
 }> {
   const key = apiKey || config.geminiKey;
+  const primary = model || config.geminiModel;
+  const secondary = secondaryModel || config.geminiSecondaryModel;
+
   if (!key) {
     updateGeminiProviderStatus({
       status: 'unconfigured',
@@ -147,17 +186,17 @@ export async function testGeminiConnectivity(apiKey?: string, model?: string): P
       ok: false,
       status: 'unconfigured',
       message: 'No GEMINI_API_KEY configured in environment.',
-      model: model || config.geminiModel,
+      model: primary,
       latencyMs: 0,
     };
   }
 
-  const selectedModel = model || config.geminiModel;
   const t0 = performance.now();
+  // 1. Test primary model
   try {
-    const ai = new GoogleGenAI({ apiKey: key, httpOptions: { timeout: 10000 } });
+    const ai = new GoogleGenAI({ apiKey: key, httpOptions: { timeout: 8000 } });
     const res = await ai.models.generateContent({
-      model: selectedModel,
+      model: primary,
       contents: 'Respond with the single word OK.',
     });
     const latencyMs = Math.round(performance.now() - t0);
@@ -173,8 +212,8 @@ export async function testGeminiConnectivity(apiKey?: string, model?: string): P
       return {
         ok: true,
         status: 'active',
-        message: `Successfully connected to Google Gemini using model '${selectedModel}' (${latencyMs}ms).`,
-        model: selectedModel,
+        message: `Successfully connected to primary Google Gemini model '${primary}' (${latencyMs}ms).`,
+        model: primary,
         latencyMs,
       };
     }
@@ -182,39 +221,58 @@ export async function testGeminiConnectivity(apiKey?: string, model?: string): P
   } catch (err) {
     const latencyMs = Math.round(performance.now() - t0);
     const parsed = parseGeminiError(err, key);
-    if (parsed.status === 404 && selectedModel !== 'gemini-2.5-flash') {
+
+    // Fatal key error: secondary model will also fail
+    if (parsed.status === 401 || /API_KEY_INVALID|invalid api key|api key not valid/i.test(parsed.message)) {
+      updateGeminiProviderStatus({
+        status: 'invalid_key',
+        lastErrorAt: new Date().toISOString(),
+        lastErrorMessage: parsed.message,
+        lastHttpStatus: parsed.status,
+        testedAt: new Date().toISOString(),
+      });
+      return {
+        ok: false,
+        status: 'invalid_key',
+        message: parsed.message,
+        model: primary,
+        latencyMs,
+      };
+    }
+
+    // 2. Test secondary model if primary failed with 503, 504, 429, or 404
+    if (secondary && secondary !== primary) {
+      const tSec = performance.now();
       try {
-        const aiFallback = new GoogleGenAI({ apiKey: key, httpOptions: { timeout: 10000 } });
-        const resFallback = await aiFallback.models.generateContent({
-          model: 'gemini-2.5-flash',
+        const aiSecondary = new GoogleGenAI({ apiKey: key, httpOptions: { timeout: 8000 } });
+        const resSec = await aiSecondary.models.generateContent({
+          model: secondary,
           contents: 'Respond with the single word OK.',
         });
-        const latencyMsFallback = Math.round(performance.now() - t0);
-        if (resFallback?.text?.trim()) {
+        const latencyMsSec = Math.round(performance.now() - tSec);
+        if (resSec?.text?.trim()) {
           updateGeminiProviderStatus({
-            status: 'active',
+            status: 'degraded',
             lastSuccessAt: new Date().toISOString(),
-            lastErrorMessage: null,
+            lastErrorMessage: `Primary '${primary}' returned ${parsed.status}; secondary '${secondary}' active`,
             lastHttpStatus: 200,
             testedAt: new Date().toISOString(),
           });
           return {
             ok: true,
-            status: 'active',
-            message: `Model '${selectedModel}' not found, but fallback 'gemini-2.5-flash' connected successfully (${latencyMsFallback}ms).`,
-            model: 'gemini-2.5-flash',
-            latencyMs: latencyMsFallback,
+            status: 'degraded',
+            message: `Primary model '${primary}' failed (${parsed.message}), but secondary model '${secondary}' connected successfully (${latencyMsSec}ms).`,
+            model: secondary,
+            latencyMs: latencyMsSec,
           };
         }
       } catch {
-        // Fall through to report original error
+        // secondary also failed
       }
     }
 
     let status: 'invalid_key' | 'model_not_found' | 'degraded' | 'error' = 'error';
-    if (parsed.status === 401 || /API_KEY_INVALID|invalid api key|api key not valid/i.test(parsed.message)) {
-      status = 'invalid_key';
-    } else if (parsed.status === 404 || /not found|unsupported model/i.test(parsed.message)) {
+    if (parsed.status === 404 || /not found|unsupported model/i.test(parsed.message)) {
       status = 'model_not_found';
     } else if (parsed.status === 503 || parsed.status === 504 || parsed.status === 429) {
       status = 'degraded';
@@ -232,7 +290,7 @@ export async function testGeminiConnectivity(apiKey?: string, model?: string): P
       ok: false,
       status,
       message: parsed.message,
-      model: selectedModel,
+      model: primary,
       latencyMs,
     };
   }
@@ -380,8 +438,10 @@ export function parseGeminiError(err: unknown, apiKey?: string): ParsedGeminiErr
   }
 
   if (!status) {
-    if (errObj.name === 'AbortError' || errObj.name === 'TimeoutError' || /timed?\s*out/i.test(rawMsg)) {
+    if (errObj.name === 'AbortError' || errObj.name === 'TimeoutError' || /timed?\s*out|deadline_exceeded/i.test(rawMsg)) {
       status = 504;
+    } else if (/429|resource_exhausted|quota|rate limit/i.test(rawMsg)) {
+      status = 429;
     } else {
       const match = rawMsg.match(/\b(503|500|502|504|400|401|403|404|408|429)\b/);
       if (match) {
@@ -426,10 +486,10 @@ export function parseGeminiError(err: unknown, apiKey?: string): ParsedGeminiErr
   // Non-retryable conditions:
   const isKeyError = /API_KEY_INVALID|UNAUTHENTICATED|invalid api key|api key not valid/i.test(rawMsg) || status === 401;
   const isPermissionError = /PERMISSION_DENIED|permission denied|forbidden/i.test(rawMsg) || status === 403;
-  const isInvalidRequest = /INVALID_ARGUMENT|invalid argument|invalid request/i.test(rawMsg) || status === 400 || status === 422;
+  const isInvalidRequest = (/INVALID_ARGUMENT|invalid argument|invalid request/i.test(rawMsg) || status === 400 || status === 422) && !isKeyError;
   const isModelNotFound = /NOT_FOUND|model not found|unsupported model|is not supported for/i.test(rawMsg) || status === 404;
 
-  if (isKeyError || isPermissionError || isInvalidRequest || isModelNotFound) {
+  if (isKeyError || isPermissionError || isInvalidRequest) {
     return {
       status,
       message: sanitizedMsg,
@@ -438,15 +498,25 @@ export function parseGeminiError(err: unknown, apiKey?: string): ParsedGeminiErr
     };
   }
 
-  // Retryable conditions:
+  if (isModelNotFound) {
+    return {
+      status: 404,
+      message: sanitizedMsg,
+      isRetryable: false, // Non-retryable on the same model, but triggers secondary model switch
+      retryAfterMs,
+    };
+  }
+
+  // Retryable conditions (503, 504, 429, transient 5xx, timeouts):
   const is503 = status === 503 || /503|service unavailable|overloaded/i.test(rawMsg);
+  const is429 = status === 429 || /429|resource_exhausted|quota|rate limit/i.test(rawMsg);
   const isTransient5xx = (status >= 500 && status < 600) || status === 408;
   const isTimeout =
     errObj.name === 'AbortError' ||
     errObj.name === 'TimeoutError' ||
-    /timed?\s*out|econnreset|etimedout|socket hang up|fetch failed/i.test(rawMsg);
+    /timed?\s*out|econnreset|etimedout|socket hang up|fetch failed|deadline_exceeded/i.test(rawMsg);
 
-  const isRetryable = is503 || isTransient5xx || isTimeout;
+  const isRetryable = is503 || is429 || isTransient5xx || isTimeout;
 
   return {
     status,
@@ -503,108 +573,183 @@ export function logConciseError(
   }
 }
 
+/**
+ * Structured diagnostic logger for Gemini operations.
+ * Explicitly redacts any sensitive keys or credentials.
+ */
+export function logGeminiDiagnostic(
+  diag: GeminiDiagnosticLog,
+  customDiagnosticLogger?: (log: GeminiDiagnosticLog) => void
+): void {
+  if (customDiagnosticLogger) {
+    customDiagnosticLogger(diag);
+    return;
+  }
+  const sanitizedLoc = sanitizeErrorDetails(diag.location);
+  const statusStr = diag.httpStatus ? String(diag.httpStatus) : 'n/a';
+  const modelInfo = diag.selectedModel
+    ? `model: ${diag.selectedModel}${diag.selectedModel !== diag.primaryModel ? ` (secondary fallback from ${diag.primaryModel})` : ''}`
+    : `models tried: [${diag.modelsAttempted.join(', ')}]`;
+  const reasonStr = diag.fallback ? ` | fallbackReason: ${diag.fallbackReason}` : '';
+  const errStr = diag.errorMessage ? ` | err: ${sanitizeErrorDetails(diag.errorMessage)}` : '';
+
+  const line = `[ai-diag] loc: "${sanitizedLoc}" | source: ${diag.source} | ${modelInfo} | status: ${statusStr} | attempts: ${diag.attempts} | geminiMs: ${diag.geminiMs}ms | backoffMs: ${diag.backoffMs}ms | fallbackMs: ${diag.fallbackMs}ms | totalMs: ${diag.totalMs}ms${reasonStr}${errStr}`;
+  console.log(line);
+}
+
 export async function callGeminiWithRetry(
   prompt: string,
   options: GeminiRetryOptions = {}
-): Promise<{ text: string; attempts: number; geminiMs: number; backoffMs: number }> {
+): Promise<{
+  text: string;
+  attempts: number;
+  totalAttempts: number;
+  geminiMs: number;
+  backoffMs: number;
+  model: string;
+  isSecondary: boolean;
+  modelsAttempted: string[];
+}> {
   const apiKey = options.apiKey || config.geminiKey;
   if (!apiKey) {
     throw new Error('No Gemini API key configured.');
   }
 
-  let activeModel = options.model || config.geminiModel;
-  const maxAttempts = options.maxAttempts ?? 3;
-  const baseDelayMs = options.baseDelayMs ?? 1000;
-  const maxDelayMs = options.maxDelayMs ?? 10000;
-  // Bounded per-attempt timeout (minimum 10s required by Gemini API deadline policy)
-  const timeoutMs = options.timeoutMs ?? 10000;
+  const primaryModel = options.model || config.geminiModel;
+  const secondaryModel = options.secondaryModel || config.geminiSecondaryModel;
+  const modelsToTry: string[] = [primaryModel];
+  if (secondaryModel && secondaryModel !== primaryModel) {
+    modelsToTry.push(secondaryModel);
+  }
+
+  // Sensible deadlines for AWS EC2 t3.micro environment (2 vCPU, 1 GB RAM)
+  const timeoutMs = options.timeoutMs ?? 7000; // 7s per attempt
+  const totalTimeoutMs = options.totalTimeoutMs ?? 15000; // 15s overall budget
+  const maxAttempts = options.maxAttempts ?? (modelsToTry.length > 1 ? 3 : 2);
+  const perModelAttempts = options.perModelAttempts ?? 2;
+  const baseDelayMs = options.baseDelayMs ?? 600;
+  const maxDelayMs = options.maxDelayMs ?? 4000;
   const jitter = options.jitter ?? true;
   const sleepFn = options.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
 
-  let lastParsedError: ParsedGeminiError | null = null;
+  const tOverallStart = performance.now();
   let totalGeminiMs = 0;
   let totalBackoffMs = 0;
-  let modelFallbackAttempted = false;
+  let totalAttempts = 0;
+  let lastParsedError: ParsedGeminiError | null = null;
+  const modelsAttempted: string[] = [];
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const controller = new AbortController();
-    let timeoutHandle: NodeJS.Timeout | null = null;
-    const tAttemptStart = performance.now();
+  for (let mIdx = 0; mIdx < modelsToTry.length; mIdx++) {
+    const currentModel = modelsToTry[mIdx];
+    modelsAttempted.push(currentModel);
+    const isSecondary = mIdx > 0;
 
-    try {
-      const runnerPromise = options.runner
-        ? options.runner({ model: activeModel, contents: prompt, signal: controller.signal })
-        : (async () => {
-            // SDK timeout cancellation aborts the underlying HTTP request via httpOptions
-            const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: timeoutMs } });
-            return ai.models.generateContent({ model: activeModel, contents: prompt });
-          })();
+    for (let modelAttempt = 1; modelAttempt <= perModelAttempts; modelAttempt++) {
+      totalAttempts++;
 
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutHandle = setTimeout(() => {
-          controller.abort();
-          const err = new Error(`Gemini request timed out after ${timeoutMs}ms`);
-          err.name = 'TimeoutError';
-          (err as unknown as { status: number }).status = 504;
-          reject(err);
-        }, timeoutMs);
-      });
-
-      const resp = await Promise.race([runnerPromise, timeoutPromise]);
-      if (timeoutHandle) clearTimeout(timeoutHandle);
-      totalGeminiMs += Math.round(performance.now() - tAttemptStart);
-
-      const text = resp?.text?.trim();
-      if (!text) {
-        throw new Error('Gemini returned an empty response.');
+      // Check remaining overall deadline
+      const elapsedOverall = Math.round(performance.now() - tOverallStart);
+      const remainingOverallMs = totalTimeoutMs - elapsedOverall;
+      if (remainingOverallMs < 800) {
+        break; // Overall budget exhausted
       }
 
-      if (!options.runner) {
-        updateGeminiProviderStatus({
-          status: 'active',
-          lastSuccessAt: new Date().toISOString(),
-          lastErrorMessage: null,
-          lastHttpStatus: 200,
-          testedAt: new Date().toISOString(),
+      // Per-attempt timeout cannot exceed remaining budget
+      const attemptTimeoutMs = Math.min(timeoutMs, Math.max(remainingOverallMs - 150, 1000));
+      const controller = new AbortController();
+      let timeoutHandle: NodeJS.Timeout | null = null;
+      const tAttemptStart = performance.now();
+
+      try {
+        const runnerPromise = options.runner
+          ? options.runner({ model: currentModel, contents: prompt, signal: controller.signal })
+          : (async () => {
+              const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: attemptTimeoutMs } });
+              return ai.models.generateContent({ model: currentModel, contents: prompt });
+            })();
+
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutHandle = setTimeout(() => {
+            controller.abort();
+            const err = new Error(`Gemini request timed out after ${attemptTimeoutMs}ms (model: ${currentModel})`);
+            err.name = 'TimeoutError';
+            (err as unknown as { status: number }).status = 504;
+            reject(err);
+          }, attemptTimeoutMs);
         });
+
+        const resp = await Promise.race([runnerPromise, timeoutPromise]);
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+        totalGeminiMs += Math.round(performance.now() - tAttemptStart);
+
+        const text = resp?.text?.trim();
+        if (!text) {
+          throw new Error(`Gemini model '${currentModel}' returned an empty response.`);
+        }
+
+        if (!options.runner) {
+          updateGeminiProviderStatus({
+            status: isSecondary ? 'degraded' : 'active',
+            lastSuccessAt: new Date().toISOString(),
+            lastErrorMessage: isSecondary ? `Primary model failed; operational on secondary '${currentModel}'` : null,
+            lastHttpStatus: 200,
+            testedAt: new Date().toISOString(),
+          });
+        }
+
+        return {
+          text,
+          model: currentModel,
+          attempts: totalAttempts,
+          totalAttempts,
+          geminiMs: totalGeminiMs,
+          backoffMs: totalBackoffMs,
+          isSecondary,
+          modelsAttempted,
+        };
+      } catch (rawErr) {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+        totalGeminiMs += Math.round(performance.now() - tAttemptStart);
+        const parsed = parseGeminiError(rawErr, apiKey);
+        lastParsedError = parsed;
+
+        // Fatal auth error -> never retry or switch models
+        const isAuthError = parsed.status === 401 || /API_KEY_INVALID|invalid api key|api key not valid/i.test(parsed.message);
+        if (isAuthError) {
+          mIdx = modelsToTry.length;
+          break;
+        }
+
+        // Model not found (404) -> switch to secondary model immediately without burning attempts
+        if (parsed.status === 404 || /not found|unsupported model/i.test(parsed.message)) {
+          break;
+        }
+
+        // Global attempt cap reached
+        if (totalAttempts >= maxAttempts) {
+          mIdx = modelsToTry.length;
+          break;
+        }
+
+        // Can we retry this same model?
+        const canRetrySameModel = modelAttempt < perModelAttempts && parsed.isRetryable;
+        const timeAllowsRetry = totalTimeoutMs - (performance.now() - tOverallStart) > 2000;
+
+        if (canRetrySameModel && timeAllowsRetry) {
+          const delay = calculateBackoff(modelAttempt, parsed.retryAfterMs, baseDelayMs, jitter, maxDelayMs);
+          const tBackoffStart = performance.now();
+          await sleepFn(delay);
+          totalBackoffMs += Math.round(performance.now() - tBackoffStart);
+        } else {
+          // Break to next candidate model (secondary model)
+          break;
+        }
       }
-
-      return { text, attempts: attempt, geminiMs: totalGeminiMs, backoffMs: totalBackoffMs };
-    } catch (rawErr) {
-      if (timeoutHandle) clearTimeout(timeoutHandle);
-      totalGeminiMs += Math.round(performance.now() - tAttemptStart);
-      const parsed = parseGeminiError(rawErr, apiKey);
-      lastParsedError = parsed;
-
-      // Model fallback check: if 404/not found and not using mock runner, attempt gemini-2.5-flash
-      if (
-        !options.runner &&
-        !modelFallbackAttempted &&
-        (parsed.status === 404 || /not found|unsupported model/i.test(parsed.message)) &&
-        activeModel !== 'gemini-2.5-flash'
-      ) {
-        modelFallbackAttempted = true;
-        console.warn(`[ai] Configured model '${activeModel}' not found. Retrying with 'gemini-2.5-flash'...`);
-        activeModel = 'gemini-2.5-flash';
-        continue;
-      }
-
-      // Do NOT retry non-retryable errors or if maximum attempts reached
-      if (!parsed.isRetryable || attempt >= maxAttempts) {
-        break;
-      }
-
-      // Exponential backoff with jitter or Retry-After
-      const delay = calculateBackoff(attempt, parsed.retryAfterMs, baseDelayMs, jitter, maxDelayMs);
-      const tBackoffStart = performance.now();
-      await sleepFn(delay);
-      totalBackoffMs += Math.round(performance.now() - tBackoffStart);
     }
   }
 
-  // Log one concise error after retries are exhausted (or non-retryable error encountered)
   const finalStatus = lastParsedError?.status || 503;
-  const finalMessage = lastParsedError?.message || 'Gemini service unavailable after retries.';
+  const finalMessage = lastParsedError?.message || `Gemini service unavailable after trying models: ${modelsAttempted.join(', ')}`;
   logConciseError('gemini', finalStatus, finalMessage, options.logger);
 
   if (!options.runner) {
@@ -630,11 +775,15 @@ export async function callGeminiWithRetry(
     isRetryable: boolean;
     geminiMs: number;
     backoffMs: number;
+    attempts: number;
+    modelsAttempted: string[];
   };
   finalError.status = finalStatus;
   finalError.isRetryable = !!lastParsedError?.isRetryable;
   finalError.geminiMs = totalGeminiMs;
   finalError.backoffMs = totalBackoffMs;
+  finalError.attempts = totalAttempts;
+  finalError.modelsAttempted = modelsAttempted;
   throw finalError;
 }
 
@@ -667,16 +816,46 @@ export async function summarise(
     JSON.stringify(c),
   ].join('\n');
 
+  const tStart = performance.now();
+  const primaryModel = options?.model ?? config.geminiModel;
+  const secondaryModel = options?.secondaryModel ?? config.geminiSecondaryModel;
+
   try {
     const res = await callGeminiWithRetry(prompt, {
       ...options,
       apiKey: effectiveKey,
-      model: options?.model ?? config.geminiModel,
+      model: primaryModel,
+      secondaryModel,
     });
+    const totalMs = Math.round(performance.now() - tStart);
+
+    logGeminiDiagnostic(
+      {
+        timestamp: new Date().toISOString(),
+        location: c.name,
+        source: 'gemini',
+        selectedModel: res.model,
+        primaryModel,
+        secondaryModel,
+        modelsAttempted: res.modelsAttempted,
+        httpStatus: 200,
+        attempts: res.attempts,
+        totalMs,
+        geminiMs: res.geminiMs,
+        backoffMs: res.backoffMs,
+        fallbackMs: 0,
+        fallback: false,
+      },
+      options?.diagnosticLogger
+    );
+
     return {
       text: res.text,
       source: 'gemini',
       attempts: res.attempts,
+      model: res.model,
+      isSecondary: res.isSecondary,
+      modelsAttempted: res.modelsAttempted,
       timing: {
         geminiMs: res.geminiMs,
         backoffMs: res.backoffMs,
@@ -687,26 +866,58 @@ export async function summarise(
     const tFallbackStart = performance.now();
     const text = ruleBasedSummary(c);
     const fallbackMs = Math.round(performance.now() - tFallbackStart);
+    const totalMs = Math.round(performance.now() - tStart);
     const parsed = parseGeminiError(err, effectiveKey);
+
     const isKeyErr =
       /API_KEY_INVALID|UNAUTHENTICATED|invalid api key|api key not valid/i.test(parsed.message) ||
       parsed.status === 401;
-    const isTimeout = parsed.status === 504 || /timed?\s*out/i.test(parsed.message);
+    const isTimeout = parsed.status === 504 || /timed?\s*out|deadline_exceeded/i.test(parsed.message);
     const is503 = parsed.status === 503 || /503|service unavailable/i.test(parsed.message);
+    const isQuota = parsed.status === 429 || /429|resource_exhausted|quota|rate limit/i.test(parsed.message);
 
     const fallbackReason: SummariseResult['fallbackReason'] = isKeyErr
       ? 'invalid_key'
-      : is503
-        ? 'service_unavailable'
-        : isTimeout
-          ? 'timeout'
-          : 'error';
+      : isQuota
+        ? 'quota_exhausted'
+        : is503
+          ? 'service_unavailable'
+          : isTimeout
+            ? 'timeout'
+            : 'error';
+
+    const modelsAttempted = (err as { modelsAttempted?: string[] })?.modelsAttempted || [primaryModel];
+
+    logGeminiDiagnostic(
+      {
+        timestamp: new Date().toISOString(),
+        location: c.name,
+        source: 'rule-based',
+        selectedModel: undefined,
+        primaryModel,
+        secondaryModel,
+        modelsAttempted,
+        httpStatus: parsed.status,
+        attempts: (err as { attempts?: number })?.attempts || modelsAttempted.length,
+        totalMs,
+        geminiMs: (err as { geminiMs?: number })?.geminiMs ?? 0,
+        backoffMs: (err as { backoffMs?: number })?.backoffMs ?? 0,
+        fallbackMs,
+        fallback: true,
+        fallbackReason,
+        errorMessage: parsed.message,
+      },
+      options?.diagnosticLogger
+    );
 
     return {
       text,
       source: 'rule-based',
       fallback: true,
       fallbackReason,
+      model: undefined,
+      modelsAttempted,
+      attempts: (err as { attempts?: number })?.attempts || modelsAttempted.length,
       timing: {
         geminiMs: (err as { geminiMs?: number })?.geminiMs ?? 0,
         backoffMs: (err as { backoffMs?: number })?.backoffMs ?? 0,
