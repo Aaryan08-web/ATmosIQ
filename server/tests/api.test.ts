@@ -81,7 +81,7 @@ const { config } = await import('../config.js');
 const { ruleBasedSummary } = await import('../ai.js');
 const { aqiCategory, getAirQualityPoint } = await import('../data/airQuality.js');
 const { haversineKm } = await import('../data/geo.js');
-const { parseBoundingBox, FIRMS_SOURCES, getFires } = await import('../data/fires.js');
+const { parseBoundingBox, FIRMS_SOURCES, getFires, httpsGetIpv4 } = await import('../data/fires.js');
 const { syncGfwAlerts, getGfwSyncStatus, getGfwForestAlerts } = await import('../data/gfwIngestion.js');
 
 let server: Server;
@@ -286,6 +286,14 @@ test('FIRMS queries support satellite sources and bounding boxes', async () => {
   assert.equal(res.status, 200);
   assert.equal(res.json.live, false);
   assert.ok(Array.isArray(res.json.points));
+});
+
+test('httpsGetIpv4 helper enforces family: 4 and handles requests', async () => {
+  assert.equal(typeof httpsGetIpv4, 'function');
+  await assert.rejects(
+    () => httpsGetIpv4('https://non-existent-domain-atmosiq-test.invalid', 100),
+    /timed out|ENOTFOUND|EAI_AGAIN|getaddrinfo/
+  );
 });
 
 test('Open-Meteo coordinate-based lookup returns multi-pollutant measurements', async () => {

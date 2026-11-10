@@ -1,6 +1,66 @@
+import https from 'node:https';
 import { config } from '../config.js';
 import { cached } from './cache.js';
 import { INDIA_BOUNDING_BOX, INDIA_BBOX_STRING, isPointInIndia, type BoundingBox } from './geo.js';
+
+export interface HttpsIpv4Response {
+  statusCode: number;
+  statusMessage?: string;
+  body: string;
+  ok: boolean;
+}
+
+/**
+ * Promise-based HTTPS GET helper configured explicitly with `family: 4` to force IPv4.
+ * Resolves NASA FIRMS API connection timeouts and socket hangs on AWS EC2 environments
+ * where dual-stack or IPv6 routing stalls or drops packets to NASA EOSDIS servers.
+ */
+export function httpsGetIpv4(url: string, timeoutMs = 30_000): Promise<HttpsIpv4Response> {
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(url);
+    const options: https.RequestOptions = {
+      protocol: parsedUrl.protocol,
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || 443,
+      path: `${parsedUrl.pathname}${parsedUrl.search}`,
+      method: 'GET',
+      family: 4, // Explicitly force IPv4 network socket resolution
+      headers: {
+        'User-Agent': 'ATmosIQ/1.0 (Environmental Intelligence Platform; India)',
+        'Accept': 'text/csv, text/plain, */*',
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.setEncoding('utf8');
+
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+
+      res.on('end', () => {
+        const statusCode = res.statusCode ?? 0;
+        resolve({
+          statusCode,
+          statusMessage: res.statusMessage,
+          body: data,
+          ok: statusCode >= 200 && statusCode < 300,
+        });
+      });
+    });
+
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error(`NASA FIRMS request timed out after ${timeoutMs}ms (family: 4 IPv4)`));
+    });
+
+    req.on('error', (err) => {
+      reject(err);
+    });
+
+    req.end();
+  });
+}
 
 export interface FirePoint {
   lat: number;
@@ -224,9 +284,9 @@ async function loadFires(options: FireQueryOptions): Promise<FireResult> {
     : INDIA_BBOX_STRING;
 
   const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${config.firmsKey}/${sourceKey}/${areaStr}/${days}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-  if (!res.ok) throw new Error(`NASA FIRMS responded with HTTP ${res.status}`);
-  const text = await res.text();
+  const res = await httpsGetIpv4(url, 30_000);
+  if (!res.ok) throw new Error(`NASA FIRMS responded with HTTP ${res.statusCode}`);
+  const text = res.body;
   if (text.startsWith('Invalid') || text.includes('<html')) {
     throw new Error('NASA FIRMS rejected the request (verify FIRMS_MAP_KEY or parameters)');
   }
