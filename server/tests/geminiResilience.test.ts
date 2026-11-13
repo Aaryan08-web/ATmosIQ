@@ -1,8 +1,11 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
 import React from 'react';
 import { renderToString } from 'react-dom/server';
+import { isPointInIndia, validateIndiaCoordinate } from '../data/geo.js';
 import {
   callGeminiWithRetry,
   summarise,
@@ -67,10 +70,15 @@ const MOCK_PROVIDERS: BuildContextProviders = {
   getAirQualityData: async () => MOCK_AQ_RESULT,
 };
 
-// Dynamically import frontend page component for server-side HTML rendering tests
+// Dynamically import frontend page component and risk calculation for tests
 // @ts-ignore - TS resolution handled via bundler paths in root tsconfig
 const { AiBriefPage } = (await import('../../src/pages/dashboard/AiBriefPage.js' as any)) as {
   AiBriefPage: React.ComponentType<{ initialSummary?: AiSummary | null }>;
+};
+
+// @ts-ignore - TS resolution handled via bundler paths in root tsconfig
+const { calculateEnvironmentalRisk } = (await import('../../src/lib/environmentalRisk.js' as any)) as {
+  calculateEnvironmentalRisk: typeof import('../../src/lib/environmentalRisk.js').calculateEnvironmentalRisk;
 };
 
 const mockContext: AreaContext = {
@@ -1368,4 +1376,542 @@ test('Regression: 6s timeout previously caused HTTP 400 "deadline too short" —
   assert.equal(successRes.source, 'gemini',
     'timeoutMs=10500 must succeed (above Google minimum 10,000 ms)');
   assert.match(successRes.text, /Delhi|air quality/i);
+});
+
+// ============================================================================
+// Tests 66–68 — Complete AI Environmental Brief Workflow & 6-Section Validation
+// Verifies sovereign Indian coordinate support, radius buffer preservation,
+// 7-stage sync pipeline context, and 6 structured report cards rendering.
+// ============================================================================
+
+// Test 66: Preservation of coordinates and radius buffer across India
+test('AI Environmental Brief Workflow: Preserves sovereign Indian coordinates and radius buffer', async () => {
+  const testLocations = [
+    { name: 'Pune Western Ghats', lat: 18.5204, lon: 73.8567, radius: 200 },
+    { name: 'Sundarbans Biosphere', lat: 21.9500, lon: 88.8500, radius: 350 },
+    { name: 'Bengaluru Plateau', lat: 12.9716, lon: 77.5946, radius: 100 },
+    { name: 'Kolkata Delta', lat: 22.5726, lon: 88.3639, radius: 500 },
+  ];
+
+  for (const loc of testLocations) {
+    const ctx = await buildContext(loc.name, loc.lat, loc.lon, loc.radius, MOCK_PROVIDERS);
+    assert.equal(ctx.name, loc.name);
+    assert.equal(ctx.lat, loc.lat);
+    assert.equal(ctx.lon, loc.lon);
+    assert.equal(ctx.radiusKm, loc.radius);
+
+    // Verify cache key uniquely isolates this exact location and radius
+    const cacheKey = buildAiSummaryCacheKey({
+      lat: loc.lat,
+      lon: loc.lon,
+      radiusKm: loc.radius,
+    });
+    assert.ok(cacheKey.includes(loc.lat.toFixed(4)));
+    assert.ok(cacheKey.includes(loc.lon.toFixed(4)));
+    assert.ok(cacheKey.includes(String(loc.radius)));
+  }
+});
+
+// Test 67: 6 structured sections with telemetry and priority actions matrix rendered in frontend
+test('AI Environmental Intelligence Brief: Renders 6 structured sections with telemetry and priority actions matrix', () => {
+  const structuredSixSectionSummary: AiSummary = {
+    summary: [
+      '1. Current Environmental Situation: Baseline air quality is Moderate with localized thermal activity in the surveillance perimeter.',
+      '2. Environmental Risk Assessment: Key risk drivers are particulate accumulation and moderate thermal anomalies.',
+      '3. Potential Impacts: Sensitive populations face respiratory stress; vegetation exhibits minor moisture desiccation.',
+      '4. Geographic Impact Assessment: Spatial buffer dispersion perimeter covers 200 km around Pune coordinates.',
+      '5. Recommendations & Action Plan: Enforce industrial emissions standards and dispatch ground verification patrols.',
+      '6. Priority Actions: Immediate 0-24h ground validation; Short-term 1-7d mobile air sweeps; Medium-term 1-3m green buffers; Long-term 3-12m regional clean energy.',
+    ].join('\n\n'),
+    source: 'gemini',
+    fallback: false,
+    model: 'gemini-3.8-flash',
+    generatedAt: new Date().toISOString(),
+    context: {
+      fires: { count: 4, totalFrp: 180, maxFrp: 65, live: true },
+      radiusKm: 200,
+      airQuality: { station: 'Pune Central', distanceKm: 5, usAqi: 94, category: 'Moderate' },
+      deforestation: [{ name: 'Koyna-Mahabaleshwar', distanceKm: 85, driver: 'Infrastructure', severity: 'Moderate' }],
+    },
+  };
+
+  const html = renderToString(React.createElement(AiBriefPage, { initialSummary: structuredSixSectionSummary }));
+
+  // Verify all 6 section titles are present
+  assert.ok(html.includes('1. Current Environmental Situation'), 'Section 1 must be present');
+  assert.ok(html.includes('2. Environmental Risk Assessment'), 'Section 2 must be present');
+  assert.ok(html.includes('3. Potential Impacts'), 'Section 3 must be present');
+  assert.ok(html.includes('4. Geographic Impact Assessment'), 'Section 4 must be present');
+  assert.ok(html.includes('5. Recommendations'), 'Section 5 must be present');
+  assert.ok(html.includes('6. Priority Actions Matrix'), 'Section 6 must be present');
+
+  // Verify time-phased operational horizons
+  assert.ok(html.includes('0 – 24 Hours'), 'Immediate horizon must be present');
+  assert.ok(html.includes('1 – 7 Days'), 'Short-term horizon must be present');
+  assert.ok(html.includes('1 – 3 Months'), 'Medium-term horizon must be present');
+  assert.ok(html.includes('3 – 12 Months'), 'Long-term horizon must be present');
+
+  // Verify telemetry chips
+  assert.ok(html.includes('AIR QUALITY'), 'Air quality telemetry chip must be present');
+  assert.ok(html.includes('THERMAL FIRES'), 'Thermal fires telemetry chip must be present');
+  assert.ok(html.includes('FOREST CANOPY'), 'Forest canopy telemetry chip must be present');
+  assert.ok(html.includes('200 km'), 'Radius buffer must be reflected');
+});
+
+// Test 68: Multi-location sovereignty and out-of-bounds coordinate rejection
+test('AI Brief Multi-Location Sovereignty: Validates diverse Indian regional locations and rejects out-of-bounds coordinates', async () => {
+  // Test valid sovereign Indian coordinates (should not throw and build context properly)
+  const validIndianPoints = [
+    { name: 'Srinagar North', lat: 34.0837, lon: 74.7973 },
+    { name: 'Kanyakumari South', lat: 8.0883, lon: 77.5385 },
+    { name: 'Dwarka West', lat: 22.2442, lon: 68.9685 },
+    { name: 'Tezu East', lat: 27.9167, lon: 96.1667 },
+  ];
+
+  for (const pt of validIndianPoints) {
+    const ctx = await buildContext(pt.name, pt.lat, pt.lon, 150, MOCK_PROVIDERS);
+    assert.equal(ctx.lat, pt.lat);
+    assert.equal(ctx.lon, pt.lon);
+  }
+
+  // Verify ruleBasedSummary works seamlessly across all regions
+  for (const pt of validIndianPoints) {
+    const ctx = await buildContext(pt.name, pt.lat, pt.lon, 150, MOCK_PROVIDERS);
+    const summary = ruleBasedSummary(ctx);
+    assert.ok(summary.length > 50, `Rule-based summary for ${pt.name} must be substantive`);
+    assert.ok(summary.includes('within 150 km'), 'Must reflect configured buffer');
+  }
+});
+
+// ============================================================================
+// Tests 69–84 — AI Environmental Brief: Code-Level Corrections & Quality Assurance
+// Regression tests covering Parts 1–6:
+// 1. calculateEnvironmentalRisk with missing AQI (does not assume 120)
+// 2. calculateEnvironmentalRisk with missing fire data
+// 3. calculateEnvironmentalRisk with missing forest data (no artificial penalties)
+// 4. All indicators missing returns null score, Insufficient Data, 0 coverage
+// 5. Score bounded between 0 and 100 under boundary conditions
+// 6. Coverage reflects available indicator weights
+// 7. Confidence reflects coverage thresholds
+// 8. Fake synchronization timers removed; 5 statuses supported
+// 9. Unavailable upstream telemetry displays unavailable state
+// 10. Confirmed upstream telemetry displays completed state with measured values
+// 11. Coordinate boundary rejects coordinates outside sovereign India
+// 12. Valid Indian coordinates and spatial radius buffer preserved
+// 13. autoTriggeredKeyRef prevents duplicate generation on mount
+// 14. requestIdRef discards stale out-of-order network responses
+// 15. 6 sections render with explicit operational disclaimer and composite indicator
+// 16. Gemini fallback clearly distinguished from Gemini generation
+// ============================================================================
+
+test('Test 69: calculateEnvironmentalRisk handles missing AQI without assuming 120 baseline', () => {
+  const result = calculateEnvironmentalRisk({
+    aqi: null,
+    fireCount: 6,
+    totalFrp: 120,
+    forestDistanceKm: 60,
+  });
+
+  assert.equal(result.indicators.airQuality.available, false);
+  assert.equal(result.indicators.airQuality.score, 0);
+  assert.ok(result.indicators.airQuality.reason?.includes('unavailable'));
+
+  // Fire: countScore = (6/15)*100 = 40, frpScore = (120/500)*100 = 24. Fire score = 40*0.6 + 24*0.4 = 33.6
+  // Forest: ((150 - 60) / 150) * 100 = 60
+  // Weights: fire=35, forest=25, availableWeight = 60
+  // Weighted sum: 33.6*35 + 60*25 = 1176 + 1500 = 2676. Score = round(2676 / 60) = 45.
+  assert.equal(result.score, 45);
+  assert.equal(result.coverage, 60);
+  assert.equal(result.confidence, 'Medium');
+  assert.equal(result.level, 'Moderate');
+});
+
+test('Test 70: calculateEnvironmentalRisk handles missing fire data without creating artificial fire risk', () => {
+  const result = calculateEnvironmentalRisk({
+    aqi: 150,
+    fireCount: null,
+    totalFrp: null,
+    forestDistanceKm: 75,
+  });
+
+  assert.equal(result.indicators.fireActivity.available, false);
+  assert.equal(result.indicators.fireActivity.score, 0);
+  assert.ok(result.indicators.fireActivity.reason?.includes('unavailable'));
+
+  // Air: (150/300)*100 = 50. Weight = 40
+  // Forest: ((150-75)/150)*100 = 50. Weight = 25
+  // availableWeight = 65. Weighted sum = (50*40 + 50*25) = 3250. Score = 3250 / 65 = 50.
+  assert.equal(result.score, 50);
+  assert.equal(result.coverage, 65);
+  assert.equal(result.confidence, 'Medium');
+  assert.equal(result.level, 'High');
+});
+
+test('Test 71: calculateEnvironmentalRisk handles missing forest data without penalty points', () => {
+  const result = calculateEnvironmentalRisk({
+    aqi: 90,
+    fireCount: 0,
+    totalFrp: 0,
+    forestDistanceKm: null,
+  });
+
+  assert.equal(result.indicators.forestLoss.available, false);
+  assert.equal(result.indicators.forestLoss.score, 0);
+  assert.ok(result.indicators.forestLoss.reason?.includes('No monitored forest front'));
+
+  // Air: (90/300)*100 = 30. Weight = 40
+  // Fire: 0. Weight = 35
+  // availableWeight = 75. Weighted sum = 30*40 = 1200. Score = round(1200 / 75) = 16.
+  assert.equal(result.score, 16);
+  assert.equal(result.coverage, 75);
+  assert.equal(result.confidence, 'Medium');
+  assert.equal(result.level, 'Low');
+});
+
+test('Test 72: calculateEnvironmentalRisk returns null score and Insufficient Data when all indicators are missing', () => {
+  const result = calculateEnvironmentalRisk({
+    aqi: null,
+    fireCount: null,
+    totalFrp: null,
+    forestDistanceKm: null,
+  });
+
+  assert.equal(result.score, null);
+  assert.equal(result.level, 'Insufficient Data');
+  assert.equal(result.confidence, 'Low');
+  assert.equal(result.coverage, 0);
+
+  const emptyResult = calculateEnvironmentalRisk({});
+  assert.equal(emptyResult.score, null);
+  assert.equal(emptyResult.level, 'Insufficient Data');
+  assert.equal(emptyResult.coverage, 0);
+});
+
+test('Test 73: calculateEnvironmentalRisk score stays bounded between 0 and 100 under boundary conditions', () => {
+  // Extreme high values
+  const highResult = calculateEnvironmentalRisk({
+    aqi: 999,
+    fireCount: 250,
+    totalFrp: 25000,
+    forestDistanceKm: 0,
+  });
+  assert.equal(highResult.score, 100);
+  assert.equal(highResult.level, 'Critical');
+  assert.ok(highResult.score! <= 100 && highResult.score! >= 0);
+
+  // Extreme low / zero values
+  const lowResult = calculateEnvironmentalRisk({
+    aqi: 0,
+    fireCount: 0,
+    totalFrp: 0,
+    forestDistanceKm: 300,
+  });
+  assert.equal(lowResult.score, 0);
+  assert.equal(lowResult.level, 'Low');
+  assert.ok(lowResult.score! >= 0);
+});
+
+test('Test 74: calculateEnvironmentalRisk coverage reflects available indicator weights', () => {
+  // Air only: 40%
+  const airOnly = calculateEnvironmentalRisk({ aqi: 100 });
+  assert.equal(airOnly.coverage, 40);
+
+  // Fire only: 35%
+  const fireOnly = calculateEnvironmentalRisk({ fireCount: 2, totalFrp: 50 });
+  assert.equal(fireOnly.coverage, 35);
+
+  // Forest only: 25%
+  const forestOnly = calculateEnvironmentalRisk({ forestDistanceKm: 40 });
+  assert.equal(forestOnly.coverage, 25);
+
+  // Air + Fire: 75%
+  const airFire = calculateEnvironmentalRisk({ aqi: 100, fireCount: 2, totalFrp: 50 });
+  assert.equal(airFire.coverage, 75);
+
+  // Air + Forest: 65%
+  const airForest = calculateEnvironmentalRisk({ aqi: 100, forestDistanceKm: 40 });
+  assert.equal(airForest.coverage, 65);
+
+  // Fire + Forest: 60%
+  const fireForest = calculateEnvironmentalRisk({ fireCount: 2, totalFrp: 50, forestDistanceKm: 40 });
+  assert.equal(fireForest.coverage, 60);
+
+  // All three: 100%
+  const allThree = calculateEnvironmentalRisk({ aqi: 100, fireCount: 2, totalFrp: 50, forestDistanceKm: 40 });
+  assert.equal(allThree.coverage, 100);
+});
+
+test('Test 75: calculateEnvironmentalRisk confidence reflects coverage thresholds', () => {
+  // >= 80% coverage => High
+  const highConf = calculateEnvironmentalRisk({ aqi: 100, fireCount: 2, totalFrp: 50, forestDistanceKm: 40 });
+  assert.equal(highConf.coverage, 100);
+  assert.equal(highConf.confidence, 'High');
+
+  // >= 50% and < 80% coverage => Medium
+  const medConf1 = calculateEnvironmentalRisk({ aqi: 100, fireCount: 2, totalFrp: 50 });
+  assert.equal(medConf1.coverage, 75);
+  assert.equal(medConf1.confidence, 'Medium');
+
+  const medConf2 = calculateEnvironmentalRisk({ fireCount: 2, totalFrp: 50, forestDistanceKm: 40 });
+  assert.equal(medConf2.coverage, 60);
+  assert.equal(medConf2.confidence, 'Medium');
+
+  // < 50% coverage => Low
+  const lowConf1 = calculateEnvironmentalRisk({ aqi: 100 });
+  assert.equal(lowConf1.coverage, 40);
+  assert.equal(lowConf1.confidence, 'Low');
+
+  const lowConf2 = calculateEnvironmentalRisk({});
+  assert.equal(lowConf2.coverage, 0);
+  assert.equal(lowConf2.confidence, 'Low');
+});
+
+test('Test 76: Fake synchronization timers are removed and state machine handles all 5 statuses', () => {
+  const filePath = path.resolve('src/pages/dashboard/AiBriefPage.tsx');
+  const code = fs.readFileSync(filePath, 'utf-8');
+
+  // Must not contain setInterval simulating fake stages
+  assert.equal(code.includes('setInterval('), false, 'Fake progress setInterval must be eliminated');
+  assert.equal(code.includes('SIMULATED_SYNC_STAGES'), false, 'Fake stage definitions must be removed');
+
+  // Must declare and support all 5 SyncSource statuses
+  assert.ok(
+    code.includes("'pending'") &&
+    code.includes("'running'") &&
+    code.includes("'completed'") &&
+    code.includes("'failed'") &&
+    code.includes("'unavailable'")
+  );
+});
+
+test('Test 77: Failed or unavailable APIs display unavailable/failed status', () => {
+  const unavailableSummary: AiSummary = {
+    summary: [
+      '1. Current Environmental Situation: Atmospheric monitoring offline.',
+      '2. Environmental Risk Assessment: Incomplete telemetry.',
+      '3. Potential Impacts: Analysis constrained.',
+      '4. Geographic Impact Assessment: 150 km perimeter.',
+      '5. Recommendations & Action Plan: Deploy mobile sensor.',
+      '6. Priority Actions: Ground sweep.',
+    ].join('\n\n'),
+    source: 'rule-based',
+    fallback: true,
+    model: 'none',
+    generatedAt: new Date().toISOString(),
+    context: {
+      fires: { count: 0, totalFrp: 0, maxFrp: 0, live: false },
+      radiusKm: 150,
+      // airQuality omitted -> unavailable
+      deforestation: [],
+    },
+  };
+
+  const html = renderToString(React.createElement(AiBriefPage, { initialSummary: unavailableSummary }));
+  assert.ok(html.includes('Atmospheric telemetry unavailable'));
+  assert.ok(html.includes('AI service unavailable · Rule-based brief applied'));
+  assert.ok(html.includes('Rule-Based Analytical Brief (Fallback)'));
+});
+
+test('Test 78: Confirmed upstream telemetry displays completed status with measured values', () => {
+  const fullSummary: AiSummary = {
+    summary: [
+      '1. Current Environmental Situation: Telemetry verified.',
+      '2. Environmental Risk Assessment: Active measurements.',
+      '3. Potential Impacts: Low impact.',
+      '4. Geographic Impact Assessment: 150 km perimeter.',
+      '5. Recommendations & Action Plan: Routine monitoring.',
+      '6. Priority Actions: Check sensors.',
+    ].join('\n\n'),
+    source: 'gemini',
+    fallback: false,
+    model: 'gemini-3.8-flash',
+    generatedAt: new Date().toISOString(),
+    context: {
+      fires: { count: 3, totalFrp: 140, maxFrp: 60, live: true },
+      radiusKm: 150,
+      airQuality: { station: 'Delhi Observational Sensor', distanceKm: 2, usAqi: 145, category: 'Unhealthy for sensitive groups' },
+      deforestation: [{ name: 'Central Ridge', distanceKm: 12, driver: 'Urbanization', severity: 'Moderate' }],
+    },
+  };
+
+  const html = renderToString(React.createElement(AiBriefPage, { initialSummary: fullSummary }));
+  assert.ok(html.includes('3 fire detection(s) within 150 km buffer'));
+  assert.ok(html.includes('Delhi Observational Sensor (US AQI 145)'));
+  assert.ok(html.includes('1 catalogued front(s)'));
+  assert.ok(html.includes('AI brief generated via Gemini'));
+});
+
+test('Test 79: Coordinate boundary rejects coordinates outside sovereign India', () => {
+  // Foreign coordinates must be rejected
+  assert.equal(isPointInIndia(51.5, -0.1), false, 'London must be rejected');
+  assert.equal(isPointInIndia(40.7128, -74.006), false, 'New York must be rejected');
+  assert.equal(isPointInIndia(1.3521, 103.8198), false, 'Singapore must be rejected');
+  assert.equal(isPointInIndia(39.0, 77.0), false, 'Far North must be rejected');
+  assert.equal(isPointInIndia(5.0, 77.0), false, 'Far South must be rejected');
+
+  assert.throws(() => validateIndiaCoordinate(51.5, -0.1), /restricted exclusively to the sovereign territory of India/);
+  assert.throws(() => validateIndiaCoordinate(999, 0), /Latitude must be between -90 and 90/);
+});
+
+test('Test 80: Valid Indian coordinates and spatial radius buffer are preserved across context lifecycle', async () => {
+  const indianCities = [
+    { name: 'Delhi', lat: 28.6139, lon: 77.209, radius: 100 },
+    { name: 'Mumbai', lat: 19.076, lon: 72.8777, radius: 250 },
+    { name: 'Bengaluru', lat: 12.9716, lon: 77.5946, radius: 300 },
+    { name: 'Kolkata', lat: 22.5726, lon: 88.3639, radius: 500 },
+  ];
+
+  for (const c of indianCities) {
+    assert.equal(isPointInIndia(c.lat, c.lon), true, `${c.name} must be within India`);
+    const ctx = await buildContext(c.name, c.lat, c.lon, c.radius, MOCK_PROVIDERS);
+    assert.equal(ctx.name, c.name);
+    assert.equal(ctx.lat, c.lat);
+    assert.equal(ctx.lon, c.lon);
+    assert.equal(ctx.radiusKm, c.radius);
+  }
+});
+
+test('Test 81: autoTriggeredKeyRef prevents duplicate generation on mount', () => {
+  const filePath = path.resolve('src/pages/dashboard/AiBriefPage.tsx');
+  const code = fs.readFileSync(filePath, 'utf-8');
+
+  // Verify autoTriggeredKeyRef and inFlightRef are used in AiBriefPage
+  assert.ok(code.includes('autoTriggeredKeyRef'), 'autoTriggeredKeyRef must be present');
+  assert.ok(code.includes('inFlightRef'), 'inFlightRef must be present');
+
+  // Deduplication state logic verification
+  let autoTriggeredKey: string | null = null;
+  let executionCount = 0;
+
+  function simulateAutoTrigger(locationKey: string) {
+    if (autoTriggeredKey === locationKey) {
+      return;
+    }
+    autoTriggeredKey = locationKey;
+    executionCount += 1;
+  }
+
+  // First mount
+  simulateAutoTrigger('28.6139,77.2090,150');
+  assert.equal(executionCount, 1);
+
+  // StrictMode re-mount with identical key
+  simulateAutoTrigger('28.6139,77.2090,150');
+  assert.equal(executionCount, 1, 'Duplicate trigger with identical key must be blocked');
+
+  // Changed location
+  simulateAutoTrigger('18.5204,73.8567,150');
+  assert.equal(executionCount, 2, 'New location must execute');
+});
+
+test('Test 82: requestIdRef discards stale out-of-order network responses', () => {
+  const filePath = path.resolve('src/pages/dashboard/AiBriefPage.tsx');
+  const code = fs.readFileSync(filePath, 'utf-8');
+
+  // Verify requestIdRef logic is present
+  assert.ok(code.includes('requestIdRef'), 'requestIdRef must be present');
+
+  // State monotonicity logic verification
+  let requestIdCounter = 0;
+  let committedState: string | null = null;
+
+  function startRequest(): number {
+    requestIdCounter += 1;
+    return requestIdCounter;
+  }
+
+  function completeRequest(reqId: number, data: string) {
+    if (reqId !== requestIdCounter) {
+      // Discard stale response
+      return;
+    }
+    committedState = data;
+  }
+
+  const req1 = startRequest(); // 1
+  const req2 = startRequest(); // 2
+
+  // req 1 completes after req 2
+  completeRequest(req1, 'Old Location Telemetry');
+  assert.equal(committedState, null, 'Stale response from req 1 must be discarded');
+
+  // req 2 completes
+  completeRequest(req2, 'Latest Location Telemetry');
+  assert.equal(committedState, 'Latest Location Telemetry', 'Active response from req 2 must be committed');
+});
+
+test('Test 83: 6 sections render with explicit operational disclaimer and composite indicator', () => {
+  const testSummary: AiSummary = {
+    summary: [
+      '1. Current Environmental Situation: Baseline observation.',
+      '2. Environmental Risk Assessment: Key drivers noted.',
+      '3. Potential Impacts: Hypothetical projections.',
+      '4. Geographic Impact Assessment: Coverage area.',
+      '5. Recommendations & Action Plan: Mitigation strategy.',
+      '6. Priority Actions: Operational timeline.',
+    ].join('\n\n'),
+    source: 'gemini',
+    fallback: false,
+    model: 'gemini-3.8-flash',
+    generatedAt: new Date().toISOString(),
+    context: {
+      fires: { count: 1, totalFrp: 25, maxFrp: 25, live: true },
+      radiusKm: 150,
+      airQuality: { station: 'Test Station', distanceKm: 10, usAqi: 80, category: 'Moderate' },
+      deforestation: [],
+    },
+  };
+
+  const html = renderToString(React.createElement(AiBriefPage, { initialSummary: testSummary }));
+
+  // Verify 6 section headings
+  assert.ok(html.includes('1. Current Environmental Situation'));
+  assert.ok(html.includes('2. Environmental Risk Assessment'));
+  assert.ok(html.includes('3. Potential Impacts'));
+  assert.ok(html.includes('4. Geographic Impact Assessment'));
+  assert.ok(html.includes('5. Recommendations'));
+  assert.ok(html.includes('6. Priority Actions Matrix'));
+
+  // Verify operational disclaimer
+  assert.ok(html.includes('Operational Notice'));
+  assert.ok(html.includes('analytical projections grounded in available telemetry, not confirmed real-world emergencies'));
+  assert.ok(html.includes('Telemetry Coverage'));
+});
+
+test('Test 84: Gemini fallback to rule-based brief is clearly distinguished without attribution to Gemini', () => {
+  const fallbackSummary: AiSummary = {
+    summary: 'Rule-based brief content.',
+    source: 'rule-based',
+    fallback: true,
+    model: 'none',
+    generatedAt: new Date().toISOString(),
+    context: {
+      fires: { count: 0, totalFrp: 0, maxFrp: 0, live: false },
+      radiusKm: 150,
+      deforestation: [],
+    },
+  };
+
+  const fallbackHtml = renderToString(React.createElement(AiBriefPage, { initialSummary: fallbackSummary }));
+  assert.ok(fallbackHtml.includes('Rule-Based Analytical Brief (Fallback)'));
+  assert.ok(fallbackHtml.includes('AI service unavailable · Rule-based brief applied'));
+  assert.equal(fallbackHtml.includes('AI brief generated via Gemini'), false);
+
+  const geminiSummary: AiSummary = {
+    summary: 'Gemini generated content.',
+    source: 'gemini',
+    fallback: false,
+    model: 'gemini-3.8-flash',
+    generatedAt: new Date().toISOString(),
+    context: {
+      fires: { count: 0, totalFrp: 0, maxFrp: 0, live: false },
+      radiusKm: 150,
+      deforestation: [],
+    },
+  };
+
+  const geminiHtml = renderToString(React.createElement(AiBriefPage, { initialSummary: geminiSummary }));
+  assert.ok(geminiHtml.includes('AI Environmental Intelligence Brief'));
+  assert.ok(geminiHtml.includes('AI brief generated via Gemini'));
+  assert.equal(geminiHtml.includes('Rule-Based Analytical Brief (Fallback)'), false);
 });

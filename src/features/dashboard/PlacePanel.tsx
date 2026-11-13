@@ -1,8 +1,7 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
-import { Sparkles, MapPin, Flame, Wind, TreeDeciduous, Crosshair, RefreshCw, AlertCircle, ShieldCheck } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { MapPin, Flame, Wind, TreeDeciduous, Crosshair, AlertCircle, ShieldCheck, Sparkles } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
-import type { AiSummary, SelectedPlace, AqPointResult, FireResult, DeforestationResult } from '@/types';
+import type { SelectedPlace, AqPointResult, FireResult, DeforestationResult } from '@/types';
 
 const ICON = { fire: Flame, air: Wind, forest: TreeDeciduous, point: Crosshair } as const;
 
@@ -33,14 +32,11 @@ interface PlacePanelProps {
   place: SelectedPlace | null;
   fires?: FireResult | null;
   forest?: DeforestationResult | null;
+  onGenerateAiBrief?: () => void;
+  radiusKm?: number;
 }
 
-export function PlacePanel({ place, fires, forest }: PlacePanelProps) {
-  // AI summary state
-  const [summary, setSummary] = useState<AiSummary | null>(null);
-  const [loadingAi, setLoadingAi] = useState(false);
-  const [errorAi, setErrorAi] = useState<string | null>(null);
-
+export function PlacePanel({ place, fires, forest, onGenerateAiBrief, radiusKm = 150 }: PlacePanelProps) {
   // Exact coordinate atmospheric telemetry state
   const [pointAq, setPointAq] = useState<AqPointResult | null>(null);
   const [aqLoading, setAqLoading] = useState(false);
@@ -50,10 +46,6 @@ export function PlacePanel({ place, fires, forest }: PlacePanelProps) {
 
   // Fetch true coordinate-based atmospheric data when coordinates change
   useEffect(() => {
-    setSummary(null);
-    setErrorAi(null);
-    setLoadingAi(false);
-
     if (!place || !Number.isFinite(place.lat) || !Number.isFinite(place.lon)) {
       setPointAq(null);
       setAqError(null);
@@ -116,9 +108,7 @@ export function PlacePanel({ place, fires, forest }: PlacePanelProps) {
     };
   }, [place?.lat, place?.lon, place?.name]);
 
-  // Proximity telemetry analysis within 150 km
-  const radiusKm = 150;
-
+  // Proximity telemetry analysis within configured radius buffer
   const nearbyFires = useMemo(() => {
     if (!place || !fires?.points) return [];
     return fires.points
@@ -128,7 +118,7 @@ export function PlacePanel({ place, fires, forest }: PlacePanelProps) {
       }))
       .filter((f) => f.distance <= radiusKm)
       .sort((a, b) => b.frp - a.frp);
-  }, [place, fires?.points]);
+  }, [place, fires?.points, radiusKm]);
 
   const nearbyForestAlerts = useMemo(() => {
     if (!place) return { live: [], ref: [] };
@@ -147,7 +137,7 @@ export function PlacePanel({ place, fires, forest }: PlacePanelProps) {
       .filter((p) => p.distance <= radiusKm);
 
     return { live, ref };
-  }, [place, forest?.liveAlerts, forest?.points]);
+  }, [place, forest?.liveAlerts, forest?.points, radiusKm]);
 
   if (!place) {
     return (
@@ -184,26 +174,6 @@ export function PlacePanel({ place, fires, forest }: PlacePanelProps) {
     return { label: 'Normal Risk', variant: 'bg-emerald-950/80 text-emerald-300 border-emerald-800/70' };
   })();
 
-  const analyse = async (bypassCache = false) => {
-    if (place.lat < 6.5 || place.lat > 37.5 || place.lon < 68.0 || place.lon > 97.5) {
-      setErrorAi('Coordinates fall outside Indian sovereign territory.');
-      return;
-    }
-    setLoadingAi(true);
-    setErrorAi(null);
-    try {
-      const res = await api<AiSummary>('/ai/summary', {
-        method: 'POST',
-        json: { name: place.name, lat: place.lat, lon: place.lon, bypassCache },
-      });
-      setSummary(res);
-    } catch (e) {
-      setErrorAi(e instanceof ApiError ? e.message : 'Could not generate the brief at this time.');
-    } finally {
-      setLoadingAi(false);
-    }
-  };
-
   const peakFrp = nearbyFires.length > 0 ? Math.round(nearbyFires[0].frp) : null;
   const latestFireTime = nearbyFires.length > 0 ? nearbyFires[0].acquired : null;
 
@@ -224,7 +194,7 @@ export function PlacePanel({ place, fires, forest }: PlacePanelProps) {
                 {place.lat.toFixed(4)}°N, {place.lon.toFixed(4)}°E
               </span>
               <span className="text-emerald-900">•</span>
-              <span>150 km buffer</span>
+              <span>{radiusKm} km buffer</span>
             </div>
           </div>
         </div>
@@ -233,6 +203,22 @@ export function PlacePanel({ place, fires, forest }: PlacePanelProps) {
           {riskStatus.label}
         </span>
       </div>
+
+      {/* Dedicated Action Row: Generate AI Brief */}
+      {onGenerateAiBrief && (
+        <div className="pt-0.5">
+          <button
+            type="button"
+            onClick={onGenerateAiBrief}
+            disabled={!place}
+            className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#174C34] via-[#103323] to-[#0A1F16] hover:from-[#1E5C3F] hover:via-[#174C34] hover:to-[#103323] text-emerald-200 hover:text-white border border-emerald-500/60 hover:border-emerald-400 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-[0_2px_12px_rgba(23,76,52,0.35)] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Generate AI Environmental Intelligence Brief for this location"
+          >
+            <Sparkles className="w-4 h-4 text-emerald-300 animate-pulse" />
+            <span>Generate AI Brief</span>
+          </button>
+        </div>
+      )}
 
       {/* 2. Three Environmental Pillars in a Responsive Container Grid */}
       <div className="place-panel-grid">
@@ -436,123 +422,6 @@ export function PlacePanel({ place, fires, forest }: PlacePanelProps) {
             <span className="shrink-0 font-mono">Verified AOI</span>
           </div>
         </div>
-      </div>
-
-      {/* 3. AI Risk Brief Action Button & Structured Output */}
-      <div className="space-y-3 pt-1">
-        <button
-          type="button"
-          onClick={() => analyse()}
-          disabled={loadingAi}
-          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#174C34] to-[#1F6244] hover:from-[#1F6244] hover:to-[#2E8B57] disabled:opacity-60 disabled:cursor-wait border border-emerald-500/50 hover:border-emerald-400 text-xs sm:text-sm font-semibold text-[#F2F5F2] transition-all duration-200 cursor-pointer shadow-md shadow-emerald-950/50"
-        >
-          {loadingAi ? (
-            <RefreshCw className="w-4 h-4 animate-spin text-emerald-300" />
-          ) : (
-            <Sparkles className="w-4 h-4 text-emerald-300" />
-          )}
-          <span>
-            {loadingAi
-              ? 'Synthesizing Environmental Intelligence…'
-              : summary
-              ? 'Regenerate AI Risk Brief'
-              : 'Generate AI Environmental Brief'}
-          </span>
-        </button>
-
-        <AnimatePresence mode="wait">
-          {loadingAi && (
-            <motion.div
-              key="skeleton"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="space-y-2 p-3.5 rounded-xl bg-[#0D1914] border border-emerald-950/70"
-              aria-hidden="true"
-            >
-              {[100, 92, 96, 70].map((w, i) => (
-                <div key={i} className="h-2.5 rounded bg-emerald-900/40 animate-pulse" style={{ width: `${w}%` }} />
-              ))}
-            </motion.div>
-          )}
-
-          {errorAi && !loadingAi && (
-            <motion.div
-              key="err"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-xs text-red-300 bg-red-950/40 border border-red-900/50 rounded-xl p-3 flex items-start gap-2"
-              role="alert"
-            >
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-              <span>{errorAi}</span>
-            </motion.div>
-          )}
-
-          {summary && !loadingAi && (
-            <motion.div
-              key="sum"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              className="space-y-3 p-4 rounded-xl bg-[#0D1914] border border-emerald-950 shadow-sm"
-            >
-              <div className="flex items-center justify-between border-b border-emerald-950/80 pb-2">
-                <div className="flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-emerald-400" />
-                  <span className="text-xs font-bold font-mono uppercase tracking-wider text-[#F2F5F2]">
-                    Executive Risk Brief
-                  </span>
-                </div>
-                <span
-                  className={`px-2 py-0.5 rounded border text-[10px] font-mono ${
-                    summary.source === 'gemini'
-                      ? 'bg-emerald-950/80 border-emerald-800/60 text-emerald-300'
-                      : 'bg-amber-950/80 border-amber-800/60 text-amber-300'
-                  }`}
-                >
-                  {summary.source === 'gemini'
-                    ? 'Gemini Intelligence'
-                    : summary.fallback
-                      ? 'Rule-Based Fallback'
-                      : 'Rule-Based Protocol'}
-                </span>
-              </div>
-
-              {summary.fallback && (
-                <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-900/60 text-[11px] text-amber-200 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <span>
-                      {summary.fallbackReason === 'invalid_key'
-                        ? 'AI key unconfigured · Showing sensor fallback'
-                        : 'AI unavailable · Showing sensor fallback'}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => analyse(true)}
-                    disabled={loadingAi}
-                    className="text-amber-300 hover:text-amber-100 font-semibold underline text-[10px] cursor-pointer"
-                  >
-                    Retry
-                  </button>
-                </div>
-              )}
-
-              <div className="text-xs text-[#CBDAD0] leading-relaxed whitespace-pre-line font-medium">
-                {summary.summary}
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-[#9CAEA2] pt-2 border-t border-emerald-950/60 font-mono">
-                <span>
-                  Telemetry Context: {summary.context.fires.count} thermal clusters in {summary.context.radiusKm} km
-                </span>
-                <span>{new Date(summary.generatedAt).toLocaleTimeString()}</span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
     </div>
   );

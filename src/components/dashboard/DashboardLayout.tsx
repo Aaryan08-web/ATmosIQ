@@ -15,6 +15,8 @@ export interface DashboardContextValue {
   refreshAll: () => Promise<void>;
   selectedPlace: SelectedPlace | null;
   setSelectedPlace: React.Dispatch<React.SetStateAction<SelectedPlace | null>>;
+  selectedRadiusKm: number;
+  setSelectedRadiusKm: React.Dispatch<React.SetStateAction<number>>;
   activeAlertCount: number;
 }
 
@@ -26,13 +28,8 @@ export const DashboardLayout: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  // Sidebar collapse state (saved in localStorage, defaults to false on desktop for immediate visibility)
-  const [collapsed, setCollapsed] = useState(() => {
-    const saved = localStorage.getItem('atmq_sidebar_collapsed');
-    return saved !== null ? saved === 'true' : false;
-  });
-
-  const [mobileOpen, setMobileOpen] = useState(false);
+  // Sidebar open/closed state (closed by default on initial dashboard load; single source of truth)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Selected place for map inspection & AI briefing across all views
   const [selectedPlace, setSelectedPlace] = useState<SelectedPlace | null>({
@@ -47,6 +44,9 @@ export const DashboardLayout: React.FC = () => {
     ],
   });
 
+  // Selected analysis radius buffer in kilometers (defaults to 150 km)
+  const [selectedRadiusKm, setSelectedRadiusKm] = useState<number>(150);
+
   // System-wide single-source telemetry (no duplicate fetching)
   const overview = useApi<Overview>('/overview');
   const fires = useApi<FireResult>('/fires');
@@ -60,20 +60,16 @@ export const DashboardLayout: React.FC = () => {
     forest.retry();
   };
 
-  const handleToggleCollapse = useCallback(() => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      localStorage.setItem('atmq_sidebar_collapsed', String(next));
-      return next;
-    });
+  const handleToggleSidebar = useCallback(() => {
+    setIsSidebarOpen((prev) => !prev);
   }, []);
 
-  const handleCloseMobile = useCallback(() => {
-    setMobileOpen(false);
+  const handleCloseSidebar = useCallback(() => {
+    setIsSidebarOpen(false);
   }, []);
 
-  const handleOpenMobile = useCallback(() => {
-    setMobileOpen(true);
+  const handleOpenSidebar = useCallback(() => {
+    setIsSidebarOpen(true);
   }, []);
 
   const handleLogout = async () => {
@@ -98,28 +94,28 @@ export const DashboardLayout: React.FC = () => {
     refreshAll,
     selectedPlace,
     setSelectedPlace,
+    selectedRadiusKm,
+    setSelectedRadiusKm,
     activeAlertCount,
   };
 
   return (
     <div className="min-h-screen bg-[#0B1713] text-[#F2F5F2] flex flex-row selection:bg-emerald-500/30 selection:text-emerald-200">
-      {/* Collapsible Persistent Sidebar with Smooth Drawer */}
+      {/* Sidebar with Desktop Push & Mobile Drawer */}
       <DashboardSidebar
         user={user}
         onLogout={handleLogout}
-        collapsed={collapsed}
-        onToggleCollapse={handleToggleCollapse}
-        mobileOpen={mobileOpen}
-        onCloseMobile={handleCloseMobile}
+        isOpen={isSidebarOpen}
+        onClose={handleCloseSidebar}
+        onToggle={handleToggleSidebar}
       />
 
-      {/* Main Application Area */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen overflow-x-hidden">
+      {/* Main Application Area with Sticky Header */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen overflow-x-clip">
         <DashboardHeader
           user={user}
-          onOpenMobileSidebar={handleOpenMobile}
-          onToggleCollapse={handleToggleCollapse}
-          collapsed={collapsed}
+          isSidebarOpen={isSidebarOpen}
+          onToggleSidebar={handleToggleSidebar}
           activeAlertCount={activeAlertCount}
         />
 

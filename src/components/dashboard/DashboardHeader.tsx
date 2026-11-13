@@ -13,7 +13,9 @@ import type { User } from '@/types';
 
 interface HeaderProps {
   user: User;
-  onOpenMobileSidebar: () => void;
+  isSidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
+  onOpenMobileSidebar?: () => void;
   onToggleCollapse?: () => void;
   collapsed?: boolean;
   activeAlertCount?: number;
@@ -21,6 +23,8 @@ interface HeaderProps {
 
 export const DashboardHeader: React.FC<HeaderProps> = ({
   user,
+  isSidebarOpen = false,
+  onToggleSidebar,
   onOpenMobileSidebar,
   onToggleCollapse,
   collapsed = false,
@@ -82,21 +86,24 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
   const isToday = customDate === getTodayISO();
 
   return (
-    <header className="h-16 px-3 sm:px-6 bg-[#0D1914]/90 backdrop-blur-md border-b border-emerald-950/80 sticky top-0 z-20 flex items-center justify-between gap-3 sm:gap-4">
+    <header className="h-16 px-3 sm:px-6 bg-[#0D1914]/95 backdrop-blur-md border-b border-emerald-950/80 sticky top-0 z-20 shadow-md flex items-center justify-between gap-3 sm:gap-4">
       {/* Left: Mobile/Desktop Toggle & Breadcrumb / Title */}
       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
         <button
           type="button"
           onClick={() => {
-            if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
-              onOpenMobileSidebar();
+            if (onToggleSidebar) {
+              onToggleSidebar();
+            } else if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
+              onOpenMobileSidebar?.();
             } else if (onToggleCollapse) {
               onToggleCollapse();
             }
           }}
           className="p-2 -ml-1 text-[#9CAEA2] hover:text-[#F2F5F2] hover:bg-[#14251C] rounded-lg shrink-0 border border-emerald-950/80 min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer transition-colors"
-          aria-label={collapsed ? "Expand sidebar navigation" : "Collapse sidebar navigation"}
-          title={collapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)"}
+          aria-label={isSidebarOpen ? "Close sidebar navigation" : "Open sidebar navigation"}
+          title={isSidebarOpen ? "Close sidebar (Ctrl+B)" : "Open sidebar (Ctrl+B)"}
+          data-sidebar-toggle="true"
         >
           <Menu className="w-5 h-5" />
         </button>

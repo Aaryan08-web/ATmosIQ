@@ -118,29 +118,29 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
       {/* Top Banner / Heading */}
-      <div className="rounded-xl border border-[#1b3d2f] bg-[#0c1b14] p-6 shadow-lg">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/10 font-bold text-emerald-400 text-2xl shadow-inner">
+      <div className="rounded-xl border border-[#1b3d2f] bg-[#0c1b14] p-6 shadow-lg min-w-0">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between min-w-0">
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/10 font-bold text-emerald-400 text-2xl shadow-inner shrink-0">
               {user?.avatarInitials || 'AQ'}
             </div>
-            <div>
-              <div className="flex items-center gap-2.5">
-                <h2 className="text-[24px] sm:text-[28px] font-bold tracking-tight text-[#e1f5ec]">{user?.name || 'Analyst'}</h2>
-                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-0.5 text-[12px] font-semibold uppercase tracking-wider text-emerald-400">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="text-[24px] sm:text-[28px] font-bold tracking-tight text-[#e1f5ec] truncate">{user?.name || 'Analyst'}</h2>
+                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-0.5 text-[12px] font-semibold uppercase tracking-wider text-emerald-400 shrink-0">
                   {user?.role || 'analyst'}
                 </span>
               </div>
-              <p className="text-[14px] text-[#82a796] flex items-center gap-3 mt-1 font-medium">
-                <span className="flex items-center gap-1.5">
-                  <Mail className="h-4 w-4 text-[#5e8f77]" />
-                  {user?.email}
+              <p className="text-[14px] text-[#82a796] flex flex-wrap items-center gap-3 mt-1 font-medium">
+                <span className="flex items-center gap-1.5 truncate">
+                  <Mail className="h-4 w-4 text-[#5e8f77] shrink-0" />
+                  <span className="truncate">{user?.email}</span>
                 </span>
                 {user?.createdAt && (
-                  <span className="flex items-center gap-1.5">
-                    <Calendar className="h-4 w-4 text-[#5e8f77]" />
+                  <span className="flex items-center gap-1.5 shrink-0">
+                    <Calendar className="h-4 w-4 text-[#5e8f77] shrink-0" />
                     Member since {user.createdAt}
                   </span>
                 )}
@@ -151,7 +151,7 @@ export default function SettingsPage() {
           <button
             onClick={handleSignOut}
             disabled={loggingOut}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-5 py-2.5 text-[14px] font-semibold text-red-300 transition hover:bg-red-500/20 disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-5 py-2.5 text-[14px] font-semibold text-red-300 transition hover:bg-red-500/20 disabled:opacity-50 cursor-pointer shrink-0 self-start sm:self-auto"
           >
             {loggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
             Sign Out

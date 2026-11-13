@@ -32,12 +32,12 @@ function getAqiBadgeColor(aqi?: number | null) {
 }
 
 export const RiskAnalysisPage: React.FC = () => {
-  const { fires, air, forest, selectedPlace, setSelectedPlace } = useDashboardContext();
+  const { fires, air, forest, selectedPlace, setSelectedPlace, selectedRadiusKm } = useDashboardContext();
 
   const [customLat, setCustomLat] = useState(selectedPlace?.lat?.toString() || '28.6139');
   const [customLon, setCustomLon] = useState(selectedPlace?.lon?.toString() || '77.2090');
   const [customName, setCustomName] = useState(selectedPlace?.name || 'Selected Target Location');
-  const [analysisRadiusKm, setAnalysisRadiusKm] = useState<number>(200);
+  const [analysisRadiusKm, setAnalysisRadiusKm] = useState<number>(selectedRadiusKm || 200);
 
   const currentLat = selectedPlace?.lat ?? parseFloat(customLat) ?? 28.6139;
   const currentLon = selectedPlace?.lon ?? parseFloat(customLon) ?? 77.2090;
@@ -242,43 +242,49 @@ export const RiskAnalysisPage: React.FC = () => {
         </div>
 
         {/* Input Coordinates Form */}
-        <form onSubmit={handleApplyCoordinates} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <form onSubmit={handleApplyCoordinates} className="space-y-3 min-w-0">
           <div>
-            <label className="text-xs sm:text-sm font-medium text-[#A8BCAE] block mb-1">Target Name</label>
+            <label className="text-xs sm:text-sm font-medium text-[#A8BCAE] block mb-1">
+              Target Observation Name <span className="text-[#82978B] font-normal text-[11px]">(Optional)</span>
+            </label>
             <input
               type="text"
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}
               placeholder="Observation point..."
-              className="w-full px-3 py-2 rounded-lg bg-[#0D1914] border border-emerald-900/60 text-xs sm:text-sm text-[#F2F5F2] focus:outline-none focus:border-emerald-500"
+              className="w-full max-w-md px-3 py-2 rounded-lg bg-[#0D1914] border border-emerald-900/60 text-xs sm:text-sm text-[#F2F5F2] focus:outline-none focus:border-emerald-500"
             />
           </div>
-          <div>
-            <label className="text-xs sm:text-sm text-[#A8BCAE] block mb-1 font-medium">Latitude (°N)</label>
-            <input
-              type="number"
-              step="any"
-              value={customLat}
-              onChange={(e) => setCustomLat(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-[#0D1914] border border-emerald-900/60 text-xs sm:text-sm text-[#F2F5F2] focus:outline-none focus:border-emerald-500 font-mono"
-            />
-          </div>
-          <div>
-            <label className="text-xs sm:text-sm text-[#A8BCAE] block mb-1 font-medium">Longitude (°E)</label>
-            <input
-              type="number"
-              step="any"
-              value={customLon}
-              onChange={(e) => setCustomLon(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-[#0D1914] border border-emerald-900/60 text-xs sm:text-sm text-[#F2F5F2] focus:outline-none focus:border-emerald-500 font-mono"
-            />
-          </div>
-          <div className="flex items-end">
+
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end min-w-0">
+            <div>
+              <label className="text-xs sm:text-sm text-[#A8BCAE] block mb-1 font-medium">Latitude (°N)</label>
+              <input
+                type="number"
+                step="any"
+                value={customLat}
+                onChange={(e) => setCustomLat(e.target.value)}
+                placeholder="28.6139"
+                className="w-full px-3 py-2 rounded-lg bg-[#0D1914] border border-emerald-900/60 text-xs sm:text-sm text-[#F2F5F2] focus:outline-none focus:border-emerald-500 font-mono h-[38px]"
+              />
+            </div>
+            <div>
+              <label className="text-xs sm:text-sm text-[#A8BCAE] block mb-1 font-medium">Longitude (°E)</label>
+              <input
+                type="number"
+                step="any"
+                value={customLon}
+                onChange={(e) => setCustomLon(e.target.value)}
+                placeholder="77.2090"
+                className="w-full px-3 py-2 rounded-lg bg-[#0D1914] border border-emerald-900/60 text-xs sm:text-sm text-[#F2F5F2] focus:outline-none focus:border-emerald-500 font-mono h-[38px]"
+              />
+            </div>
             <button
               type="submit"
-              className="w-full py-2 px-4 rounded-lg bg-[#174C34] hover:bg-[#1F6244] border border-emerald-600/70 text-xs sm:text-sm font-semibold text-[#F2F5F2] transition-colors cursor-pointer"
+              className="w-full sm:w-auto px-5 rounded-lg bg-[#14251C] hover:bg-[#1A3326] border border-emerald-800/70 text-xs sm:text-sm font-semibold text-[#F2F5F2] transition-colors cursor-pointer flex items-center justify-center gap-2 h-[38px] shrink-0"
             >
-              Analyze Coordinates
+              <Crosshair className="w-4 h-4 text-emerald-400" />
+              <span>Analyse Coordinates</span>
             </button>
           </div>
         </form>

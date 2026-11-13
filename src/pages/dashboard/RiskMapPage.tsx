@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDashboardContext } from '@/components/dashboard/DashboardLayout';
 import { AdvancedMap, type MapMarker, type MapCircle, type MapPolygon } from '@/components/ui/interactive-map';
 import { MapLayerControls, type LayerKey } from '@/components/dashboard/MapLayerControls';
 import { MapLegend } from '@/components/dashboard/MapLegend';
 import { PlacePanel } from '@/features/dashboard/PlacePanel';
-import { Navigation, Globe, Shield } from 'lucide-react';
+import { Navigation, Globe, Shield, Sparkles } from 'lucide-react';
 import type { SelectedPlace } from '@/types';
 
 export const RiskMapPage: React.FC = () => {
-  const { fires, air, forest, selectedPlace, setSelectedPlace } = useDashboardContext();
+  const navigate = useNavigate();
+  const { fires, air, forest, selectedPlace, setSelectedPlace, selectedRadiusKm } = useDashboardContext();
 
   const [activeLayers, setActiveLayers] = useState<Record<LayerKey, boolean>>({
     air: true,
@@ -32,6 +34,22 @@ export const RiskMapPage: React.FC = () => {
       kind: 'point',
       details: [`Geographic coordinates: ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E`],
     });
+  };
+
+  const handleGenerateAiBrief = () => {
+    if (!selectedPlace) {
+      return;
+    }
+
+    const params = new URLSearchParams({
+      name: selectedPlace.name,
+      lat: String(selectedPlace.lat),
+      lon: String(selectedPlace.lon),
+      radius: String(selectedRadiusKm || 150),
+      auto: 'true',
+    });
+
+    navigate(`/dashboard/ai-brief?${params.toString()}`);
   };
 
   // Convert telemetry to MapMarkers with strictly verified data
@@ -429,18 +447,37 @@ export const RiskMapPage: React.FC = () => {
 
         {/* Right: Selected Location & AI Briefing (Self-Hugging Height) */}
         <div className="lg:col-span-4 self-start h-fit rounded-xl bg-[#101F18] border border-emerald-950/80 overflow-hidden shadow-sm flex flex-col">
-          <div className="px-4 py-3 border-b border-emerald-950/80 bg-[#0D1914] flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <h3 className="text-xs font-bold font-mono uppercase tracking-wider text-[#F2F5F2]">
+          <div className="px-4 py-3 border-b border-emerald-950/80 bg-[#0D1914] flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+              <h3 className="text-xs font-bold font-mono uppercase tracking-wider text-[#F2F5F2] truncate">
                 Target Location Intelligence
               </h3>
             </div>
-            <span className="text-[11px] font-mono text-[#9CAEA2]">Synchronous Buffer</span>
+            <button
+              type="button"
+              onClick={handleGenerateAiBrief}
+              disabled={!selectedPlace}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all shrink-0 ${
+                selectedPlace
+                  ? 'bg-gradient-to-r from-[#174C34] to-[#103323] hover:from-[#1E5C3F] hover:to-[#143D2A] text-emerald-200 hover:text-white border-emerald-500/60 hover:border-emerald-400 cursor-pointer shadow-sm'
+                  : 'bg-zinc-800/40 text-zinc-500 border-zinc-700/50 cursor-not-allowed opacity-60'
+              }`}
+              title={selectedPlace ? "Generate AI Environmental Intelligence Brief" : "Select a location on the map to generate AI Brief"}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
+              <span>Generate AI Brief</span>
+            </button>
           </div>
 
           <div className="p-0">
-            <PlacePanel place={selectedPlace} fires={fires.data} forest={forest.data} />
+            <PlacePanel
+              place={selectedPlace}
+              fires={fires.data}
+              forest={forest.data}
+              onGenerateAiBrief={handleGenerateAiBrief}
+              radiusKm={selectedRadiusKm || 150}
+            />
           </div>
         </div>
       </div>

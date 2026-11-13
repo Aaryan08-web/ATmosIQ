@@ -16,7 +16,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   onNavigate
 }) => {
   return (
-    <div className="relative min-h-screen w-full bg-[#0B1713] text-[#F2F5F2] flex flex-col justify-between overflow-x-hidden">
+    <div className="relative min-h-screen w-full bg-[#0B1713] text-[#F2F5F2] flex flex-col justify-between overflow-x-clip">
       {/* Globe as background visual with interactive observation pins */}
       <AuthGlobeBackground />
 

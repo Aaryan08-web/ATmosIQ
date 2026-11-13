@@ -175,13 +175,25 @@ export interface AiSummaryTiming {
   cached: boolean;
 }
 
+export interface AiSummaryContext {
+  name?: string;
+  lat?: number;
+  lon?: number;
+  radiusKm: number;
+  fires: { count: number; totalFrp: number; maxFrp: number; live: boolean };
+  airQualityStatus?: string;
+  airQuality?: { station: string; distanceKm: number; usAqi: number | null; pm25?: number; category: string } | null;
+  deforestation?: Array<{ name: string; distanceKm: number; driver: string; severity?: string }>;
+}
+
 export interface AiSummary {
   summary: string;
   source: 'gemini' | 'rule-based';
   fallback?: boolean;
   fallbackReason?: string;
+  model?: string;
   generatedAt: string;
-  context: { fires: { count: number; totalFrp: number; maxFrp: number; live: boolean }; radiusKm: number };
+  context: AiSummaryContext;
   timing?: AiSummaryTiming;
   cacheKey?: string;
 }
